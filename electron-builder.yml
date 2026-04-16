@@ -1,0 +1,23 @@
+appId: com.rankforge.app
+productName: RankForge
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - "!node_modules/**/*"
+extraResources:
+  - from: backend
+    to: backend
+    filter:
+      - "**/*"
+      - "!__pycache__/**"
+      - "!.env"
+      - "!.venv/**"
+      - "!*.pyc"
+win:
+  target: nsis
+mac:
+  target: dmg
+linux:
+  target: AppImage
