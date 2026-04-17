@@ -1,13 +1,30 @@
-import type { SearchResult, GraphData } from '../../../shared/types'
+import type {
+  ContentItem,
+  ContentType,
+  GraphData,
+  GraphEdge,
+  GraphNode,
+  IngestFilePayload,
+  IngestTextPayload,
+  SearchResult
+} from '../../../shared/types'
 
-export type { SearchResult }
-export type GraphNode = { id: string; title: string }
-export type GraphEdge = { from: string; to: string }
-
-export async function searchContent(q: string): Promise<SearchResult[]> {
-  return window.api.searchContent(q)
+export type {
+  ContentItem,
+  ContentType,
+  GraphData,
+  GraphEdge,
+  GraphNode,
+  IngestFilePayload,
+  IngestTextPayload,
+  SearchResult
 }
 
-export async function getGraph(): Promise<GraphData> {
-  return window.api.getGraph()
-}
+export const searchContent = (q: string) => window.api.searchContent(q)
+export const getGraph = () => window.api.getGraph()
+export const listContent = () => window.api.listContent()
+export const getContent = (id: string) => window.api.getContent(id)
+export const ingestFile = (payload: IngestFilePayload) => window.api.ingestFile(payload)
+export const ingestText = (payload: IngestTextPayload) => window.api.ingestText(payload)
+export const deleteContent = (id: string) => window.api.deleteContent(id)
+export const recomputePagerank = () => window.api.recomputePagerank()
