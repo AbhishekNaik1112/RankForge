@@ -7,7 +7,9 @@ interface Props {
 }
 
 export function ResultCard({ result, onClick }: Props) {
-  const preview = (result.body ?? '').slice(0, 200)
+  // Prefer the matched chunk (the actual passage that ranked the result),
+  // fall back to the body preview for legacy/image rows.
+  const preview = (result.matched_chunk ?? result.body ?? '').slice(0, 240)
 
   return (
     <button

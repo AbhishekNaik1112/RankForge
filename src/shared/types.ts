@@ -18,6 +18,7 @@ export interface ContentItem {
 }
 
 export interface SearchResult extends ContentItem {
+  matched_chunk: string | null
   semantic_similarity: number
   keyword_match: number
   pagerank_norm: number

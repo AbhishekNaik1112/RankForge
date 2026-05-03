@@ -235,6 +235,28 @@ def check_signal_isolation() -> None:
 # Direct SQL signal sanity
 
 
+def check_chunk_distribution() -> None:
+    section("8. content_chunks: per-doc chunk counts")
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.title, c.content_type, COUNT(cc.id) AS chunks
+            FROM content c
+            LEFT JOIN content_chunks cc ON cc.content_id = c.id
+            GROUP BY c.id, c.title, c.content_type
+            ORDER BY chunks DESC, c.title
+            """
+        ).fetchall()
+        total_chunks = sum(r[2] for r in rows)
+        with_chunks = sum(1 for r in rows if r[2] > 0)
+        print(f"  total chunks: {total_chunks}")
+        print(f"  docs with chunks: {with_chunks} / {len(rows)}")
+        print(f"  {'title':40s} {'type':10s} chunks")
+        for title, ct, n in rows:
+            title_s = (title or "")[:38]
+            print(f"  {title_s:40s} {ct:10s} {n}")
+
+
 def check_pgvector_direct() -> None:
     section("6. pgvector: direct cosine distance (bypass ranking layer)")
     # Pick an ML-cluster title and find its 3 nearest neighbors by raw cosine distance
@@ -297,6 +319,7 @@ def main() -> None:
     check_signal_isolation()
     check_pgvector_direct()
     check_fts_direct()
+    check_chunk_distribution()
 
     print("\n" + "=" * 72)
     print("  ALL CHECKS COMPLETE")

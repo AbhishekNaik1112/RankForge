@@ -41,6 +41,16 @@ def embed_text(text: str) -> NDArray[np.float32]:
     return np.asarray(vector, dtype=np.float32)
 
 
+def embed_batch(texts: list[str], batch_size: int = 32) -> list[NDArray[np.float32]]:
+    """Embed many texts in one call. Sentence-Transformers batches internally;
+    this is significantly faster than looping over embed_text()."""
+    if not texts:
+        return []
+    model = _get_model()
+    vectors = model.encode(texts, convert_to_numpy=True, batch_size=batch_size)
+    return [np.asarray(v, dtype=np.float32) for v in vectors]
+
+
 def embed_image(image_path: str | Path) -> NDArray[np.float32]:
     model = _get_model()
     with Image.open(image_path) as img:

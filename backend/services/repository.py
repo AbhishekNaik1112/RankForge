@@ -34,6 +34,7 @@ class SearchCandidate:
     cosine_distance: float | None  # None if the row came only from FTS (no vector hit)
     fts_rank: float | None         # None if the row came only from semantic (no FTS hit)
     pagerank: float | None
+    matched_chunk: str | None      # body of the closest matching chunk (None for images / legacy)
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ async def insert_content(
     mime_type: str | None,
     file_size: int | None,
     thumbnail_path: str | None,
-    embedding: NDArray[np.float32],
+    embedding: NDArray[np.float32] | None,
 ) -> ContentRow:
     content_id = uuid.uuid4()
     async with aget_conn() as conn:
@@ -136,6 +137,29 @@ async def delete_content(content_id: uuid.UUID) -> DeletedPaths | None:
     return DeletedPaths(source_path=row[0], thumbnail_path=row[1])
 
 
+async def insert_chunks(
+    content_id: uuid.UUID,
+    chunks: list[tuple[int, str, NDArray[np.float32]]],
+) -> int:
+    """Bulk-insert chunks for a content row. Each tuple is (ord, body, embedding).
+
+    Returns the number of rows inserted. No-op for an empty list.
+    """
+    if not chunks:
+        return 0
+    rows = [(content_id, ord_, body, emb) for ord_, body, emb in chunks]
+    async with aget_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.executemany(
+                """
+                INSERT INTO content_chunks (content_id, ord, body, embedding)
+                VALUES (%s, %s, %s, %s)
+                """,
+                rows,
+            )
+    return len(rows)
+
+
 async def insert_link(*, from_id: uuid.UUID, to_id: uuid.UUID) -> None:
     async with aget_conn() as conn:
         await conn.execute(
@@ -204,45 +228,80 @@ async def hybrid_candidates(
     query_text: str,
     limit: int,
 ) -> list[SearchCandidate]:
-    """Fetch candidates using semantic ANN and FTS in a single query (UNION), then merge.
+    """Fetch candidates from BOTH chunks (text content) AND parent rows
+    (images + any legacy text rows still carrying content.embedding).
 
-    Each row has either a `cosine_distance` (from semantic search),
-    an `fts_rank` (from FTS), or both (when a row matches in both).
-    Downstream scoring combines both signals with PageRank and freshness.
+    Pipeline:
+    1. Top-K semantic + FTS hits over content_chunks, grouped by content_id
+       (best chunk per parent doc).
+    2. Top-K semantic + FTS hits over content (catches images via image
+       embeddings; also catches legacy text rows that haven't been re-chunked).
+    3. UNION ALL → group by content_id → MIN(distance), MAX(rank).
+    4. Pull the best-matching chunk body per parent for the UI snippet.
+    5. JOIN content for metadata, LEFT JOIN content_rank for PageRank.
     """
     async with aget_conn() as conn:
         cur = await conn.execute(
             """
-            WITH semantic AS (
-                SELECT c.id,
-                       (c.embedding <=> %(vec)s) AS cosine_distance,
-                       NULL::float AS fts_rank
+            WITH chunk_sem AS (
+                SELECT cc.content_id,
+                       MIN(cc.embedding <=> %(vec)s) AS dist
+                FROM content_chunks cc
+                GROUP BY cc.content_id
+                ORDER BY dist
+                LIMIT %(limit)s
+            ),
+            chunk_fts AS (
+                SELECT cc.content_id,
+                       MAX(ts_rank_cd(cc.tsv, plainto_tsquery('english', %(q)s))) AS rank
+                FROM content_chunks cc
+                WHERE cc.tsv @@ plainto_tsquery('english', %(q)s)
+                GROUP BY cc.content_id
+                ORDER BY rank DESC
+                LIMIT %(limit)s
+            ),
+            parent_sem AS (
+                SELECT c.id AS content_id,
+                       (c.embedding <=> %(vec)s) AS dist
                 FROM content c
                 WHERE c.embedding IS NOT NULL
                 ORDER BY c.embedding <=> %(vec)s
                 LIMIT %(limit)s
             ),
-            keyword AS (
-                SELECT c.id,
-                       NULL::float AS cosine_distance,
-                       ts_rank_cd(c.tsv, plainto_tsquery('english', %(q)s)) AS fts_rank
+            parent_fts AS (
+                SELECT c.id AS content_id,
+                       ts_rank_cd(c.tsv, plainto_tsquery('english', %(q)s)) AS rank
                 FROM content c
                 WHERE c.tsv @@ plainto_tsquery('english', %(q)s)
-                ORDER BY fts_rank DESC
+                ORDER BY rank DESC
                 LIMIT %(limit)s
             ),
             merged AS (
-                SELECT id,
-                       MIN(cosine_distance) AS cosine_distance,
-                       MAX(fts_rank) AS fts_rank
-                FROM (SELECT * FROM semantic UNION ALL SELECT * FROM keyword) u
-                GROUP BY id
+                SELECT content_id,
+                       MIN(dist) AS cosine_distance,
+                       MAX(rank) AS fts_rank
+                FROM (
+                    SELECT content_id, dist, NULL::float AS rank FROM chunk_sem
+                    UNION ALL SELECT content_id, NULL::float, rank FROM chunk_fts
+                    UNION ALL SELECT content_id, dist, NULL::float FROM parent_sem
+                    UNION ALL SELECT content_id, NULL::float, rank FROM parent_fts
+                ) u
+                GROUP BY content_id
+            ),
+            best_chunks AS (
+                SELECT DISTINCT ON (cc.content_id)
+                       cc.content_id,
+                       cc.body AS chunk_body
+                FROM content_chunks cc
+                WHERE cc.content_id IN (SELECT content_id FROM merged)
+                ORDER BY cc.content_id, cc.embedding <=> %(vec)s
             )
             SELECT c.id, c.title, c.body, c.content_type, c.thumbnail_path, c.created_at,
-                   m.cosine_distance, m.fts_rank, r.pagerank
+                   m.cosine_distance, m.fts_rank, r.pagerank, bc.chunk_body
             FROM merged m
-            JOIN content c ON c.id = m.id
+            JOIN content c ON c.id = m.content_id
             LEFT JOIN content_rank r ON r.content_id = c.id
+            LEFT JOIN best_chunks bc ON bc.content_id = c.id
             """,
             {"vec": query_embedding, "q": query_text, "limit": limit},
         )
@@ -259,6 +318,7 @@ async def hybrid_candidates(
             cosine_distance=float(r[6]) if r[6] is not None else None,
             fts_rank=float(r[7]) if r[7] is not None else None,
             pagerank=float(r[8]) if r[8] is not None else None,
+            matched_chunk=r[9],
         )
         for r in rows
     ]

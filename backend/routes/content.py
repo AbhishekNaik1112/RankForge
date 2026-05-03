@@ -9,7 +9,8 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from services.embeddings import embed_image, embed_text
+from services.chunker import split as split_chunks
+from services.embeddings import embed_batch, embed_image, embed_text
 from services.extractors import detect_content_type, extract_body
 from services.ranking import (
     cosine_distance_to_similarity,
@@ -22,6 +23,7 @@ from services.repository import (
     delete_content,
     get_content,
     hybrid_candidates,
+    insert_chunks,
     insert_content,
     list_content,
     get_max_pagerank,
@@ -67,6 +69,7 @@ class SearchResult(BaseModel):
     body: str | None
     content_type: str
     thumbnail_path: str | None
+    matched_chunk: str | None
     semantic_similarity: float
     keyword_match: float
     pagerank_norm: float
@@ -123,10 +126,13 @@ async def ingest_file(payload: IngestFileRequest):
     mime_type = _guess_mime(content_type, src)
 
     if content_type == "image":
+        # Image content keeps its CLIP image embedding on the parent row;
+        # no chunking (CLIP image encoder operates on the whole image).
         embedding = await asyncio.to_thread(embed_image, src)
         body = None
         thumb = await asyncio.to_thread(make_thumbnail, src, src.parent)
         thumbnail_path = str(thumb)
+        chunks: list[str] = []
     else:
         body = await asyncio.to_thread(extract_body, src, content_type)
         if not body.strip():
@@ -134,8 +140,11 @@ async def ingest_file(payload: IngestFileRequest):
                 status_code=422,
                 detail=f"No extractable text in {content_type} file (scanned PDFs are not supported).",
             )
-        embedding = await asyncio.to_thread(embed_text, body)
+        # Text content lives in chunks. Parent row stores the body for
+        # display; embedding stays NULL — search hits content_chunks.
+        embedding = None
         thumbnail_path = None
+        chunks = await asyncio.to_thread(split_chunks, body)
 
     row = await insert_content(
         title=title,
@@ -147,19 +156,27 @@ async def ingest_file(payload: IngestFileRequest):
         thumbnail_path=thumbnail_path,
         embedding=embedding,
     )
+
+    chunk_count = 0
+    if chunks:
+        chunk_vectors = await asyncio.to_thread(embed_batch, chunks)
+        chunk_rows = list(zip(range(len(chunks)), chunks, chunk_vectors))
+        chunk_count = await insert_chunks(row.id, chunk_rows)
+
     logger.info(
         "ingest_file",
         id=str(row.id),
         content_type=content_type,
         file_size=file_size,
         body_chars=len(body) if body else 0,
+        chunks=chunk_count,
     )
     return _to_response(row)
 
 
 @router.post("/content/paste", response_model=ContentResponse)
 async def ingest_text(payload: IngestTextRequest):
-    embedding = await asyncio.to_thread(embed_text, f"{payload.title}\n{payload.body}")
+    chunks = await asyncio.to_thread(split_chunks, f"{payload.title}\n\n{payload.body}")
     row = await insert_content(
         title=payload.title,
         body=payload.body,
@@ -168,8 +185,12 @@ async def ingest_text(payload: IngestTextRequest):
         mime_type="text/plain",
         file_size=len(payload.body.encode("utf-8")),
         thumbnail_path=None,
-        embedding=embedding,
+        embedding=None,
     )
+    if chunks:
+        chunk_vectors = await asyncio.to_thread(embed_batch, chunks)
+        chunk_rows = list(zip(range(len(chunks)), chunks, chunk_vectors))
+        await insert_chunks(row.id, chunk_rows)
     return _to_response(row)
 
 
@@ -219,6 +240,7 @@ async def search_content(
                 body=row.body,
                 content_type=row.content_type,
                 thumbnail_path=row.thumbnail_path,
+                matched_chunk=row.matched_chunk,
                 semantic_similarity=semantic,
                 keyword_match=fts,
                 pagerank_norm=pr_norm,
