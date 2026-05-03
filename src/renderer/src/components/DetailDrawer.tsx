@@ -97,6 +97,7 @@ export function DetailDrawer({ item, onClose, onDelete }: Props) {
             <img
               src={`file://${item.thumbnail_path}`}
               alt={item.title}
+              decoding="async"
               style={{
                 width: '100%',
                 maxHeight: 320,

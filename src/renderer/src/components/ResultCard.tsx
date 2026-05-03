@@ -42,6 +42,8 @@ export function ResultCard({ result, onClick }: Props) {
           src={`file://${result.thumbnail_path}`}
           alt=""
           aria-hidden
+          loading="lazy"
+          decoding="async"
           style={{
             width: 64,
             height: 64,

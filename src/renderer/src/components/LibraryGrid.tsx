@@ -62,6 +62,8 @@ export function LibraryGrid({ items, onOpen }: Props) {
               src={`file://${item.thumbnail_path}`}
               alt=""
               aria-hidden
+              loading="lazy"
+              decoding="async"
               style={{
                 width: '100%',
                 aspectRatio: '4 / 3',
