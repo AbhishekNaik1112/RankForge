@@ -5,6 +5,8 @@ import { join } from 'path'
 import { createServer } from 'net'
 import { is } from '@electron-toolkit/utils'
 
+import { readConfig } from './config'
+
 let pythonProcess: ChildProcess | null = null
 let pythonPort: number | null = null
 
@@ -98,11 +100,18 @@ export async function spawnPython(): Promise<void> {
 
   pythonPort = port
 
-  const env = {
+  // Pull DATABASE_URL from userData/config.json (set by the first-run wizard).
+  // In dev, falls through to whatever's in backend/.env via python-dotenv.
+  const cfg = await readConfig()
+
+  const env: Record<string, string> = {
     ...process.env,
     HOST: '127.0.0.1',
     PORT: String(port),
     LOG_DIR: join(app.getPath('userData'), 'logs')
+  }
+  if (cfg.databaseUrl) {
+    env.DATABASE_URL = cfg.databaseUrl
   }
 
   pythonProcess = spawn(command, args, {

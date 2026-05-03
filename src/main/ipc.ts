@@ -1,7 +1,8 @@
 import { app, ipcMain, net, shell } from 'electron'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
-import { getPythonPort } from './python'
+import { isConfigured, readConfig, writeConfig } from './config'
+import { getPythonPort, isPythonRunning, spawnPython, waitForReady } from './python'
 import { saveDroppedFile } from './files'
 import type { IngestFilePayload, IngestTextPayload } from '../shared/types'
 
@@ -97,5 +98,40 @@ export function registerIpcHandlers(): void {
     await mkdir(logDir, { recursive: true })
     const error = await shell.openPath(logDir)
     return { ok: error === '', error: error || undefined }
+  })
+
+  // First-run / setup wizard
+  ipcMain.handle('is-configured', async () => {
+    return { configured: await isConfigured(), running: isPythonRunning() }
+  })
+
+  ipcMain.handle('get-config', async () => {
+    const cfg = await readConfig()
+    // Don't return the actual URL to avoid logging it; just whether it's set.
+    // The wizard never needs to read it back — only to set a new one.
+    return { databaseUrl: cfg.databaseUrl ? '••••configured••••' : '' }
+  })
+
+  ipcMain.handle('setup-backend', async (_event, payload: { databaseUrl: string }) => {
+    const url = payload?.databaseUrl?.trim()
+    if (!url) {
+      throw new Error('databaseUrl is required')
+    }
+    await writeConfig({ databaseUrl: url })
+
+    if (isPythonRunning()) {
+      // Already running with old/missing config — caller is changing
+      // the URL. They need to restart for the new URL to take effect.
+      return { ok: true, restartRequired: true }
+    }
+
+    try {
+      await spawnPython()
+      await waitForReady()
+      return { ok: true, restartRequired: false }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start backend'
+      throw new Error(message)
+    }
   })
 }

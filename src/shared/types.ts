@@ -76,4 +76,11 @@ export interface IpcApi {
 
   // Diagnostics
   openLogDir: () => Promise<{ ok: boolean; error?: string }>
+
+  // First-run setup
+  isConfigured: () => Promise<{ configured: boolean; running: boolean }>
+  getConfig: () => Promise<{ databaseUrl: string }>
+  setupBackend: (payload: {
+    databaseUrl: string
+  }) => Promise<{ ok: boolean; restartRequired: boolean }>
 }

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, session } from 'electron'
 import { join } from 'path'
 import { is, optimizer } from '@electron-toolkit/utils'
+import { isConfigured } from './config'
 import { spawnPython, waitForReady, killPython } from './python'
 import { registerIpcHandlers } from './ipc'
 
@@ -63,21 +64,29 @@ app.whenReady().then(async () => {
   // Register IPC handlers before creating window
   registerIpcHandlers()
 
-  // Spawn Python backend
-  try {
-    console.log('[main] Starting Python backend...')
-    await spawnPython()
-    await waitForReady()
-    console.log('[main] Python backend is ready')
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error starting backend'
-    console.error('[main]', message)
-    dialog.showErrorBox(
-      'Backend Error',
-      `Failed to start the Python backend.\n\n${message}\n\nPlease ensure Python 3.9+ is installed and on your PATH, and that backend dependencies are installed (pip install -r backend/requirements.txt).`
-    )
-    app.quit()
-    return
+  // First-run flow: if no DATABASE_URL is configured yet, skip the Python
+  // spawn — open the window straight to the setup wizard. The renderer
+  // calls window.api.setupBackend(url) when the user submits, which writes
+  // config.json and spawns Python at that point.
+  const configured = await isConfigured()
+  if (configured) {
+    try {
+      console.log('[main] Starting Python backend...')
+      await spawnPython()
+      await waitForReady()
+      console.log('[main] Python backend is ready')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error starting backend'
+      console.error('[main]', message)
+      dialog.showErrorBox(
+        'Backend Error',
+        `Failed to start the Python backend.\n\n${message}\n\nIf this is the first launch after a config change, the DATABASE_URL may be invalid — open Settings to update it, or delete config.json in your userData directory to re-run the setup wizard.`
+      )
+      app.quit()
+      return
+    }
+  } else {
+    console.log('[main] No DATABASE_URL configured — showing setup wizard.')
   }
 
   // Create main window

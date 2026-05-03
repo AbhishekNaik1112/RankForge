@@ -16,7 +16,11 @@ const api: IpcApi = {
   getHealth: () => ipcRenderer.invoke('get-health'),
   getPythonStatus: () => ipcRenderer.invoke('get-python-status'),
 
-  openLogDir: () => ipcRenderer.invoke('open-log-dir')
+  openLogDir: () => ipcRenderer.invoke('open-log-dir'),
+
+  isConfigured: () => ipcRenderer.invoke('is-configured'),
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setupBackend: (payload) => ipcRenderer.invoke('setup-backend', payload)
 }
 
 contextBridge.exposeInMainWorld('api', api)
