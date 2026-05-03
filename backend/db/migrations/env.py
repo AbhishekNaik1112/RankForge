@@ -1,8 +1,13 @@
-"""Alembic env — online migrations against DATABASE_URL from settings.py."""
+"""Alembic env — online migrations against DATABASE_URL from settings.py.
+
+Note: we intentionally do NOT call logging.config.fileConfig() here. Alembic's
+default env.py would, but that wipes the app's structlog handlers when
+init_db() is invoked from the FastAPI lifespan. Alembic's INFO lines still
+flow through Python's logging (and thus through structlog's stdlib bridge).
+"""
 from __future__ import annotations
 
 import sys
-from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
@@ -14,9 +19,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from settings import require_database_url  # noqa: E402
 
 config = context.config
-
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
 
 
 def _sqlalchemy_url() -> str:

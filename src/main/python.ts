@@ -94,7 +94,10 @@ export async function spawnPython(): Promise<void> {
 
   pythonProcess = spawn(
     pythonExe,
-    ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(port)],
+    // Launch via run.py (not `-m uvicorn`) so the asyncio event-loop policy
+    // can be set before uvicorn creates its loop. Required on Windows for
+    // psycopg's async mode.
+    ['run.py'],
     {
       cwd: backendDir,
       env,

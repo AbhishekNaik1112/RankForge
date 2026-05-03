@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 from numpy.typing import NDArray
 
-from db.client import get_conn
+from db.client import aget_conn
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,21 @@ class DeletedPaths:
     thumbnail_path: str | None
 
 
-def insert_content(
+def _row_to_content_row(r) -> ContentRow:
+    return ContentRow(
+        id=r[0],
+        title=r[1],
+        body=r[2],
+        content_type=r[3],
+        source_path=r[4],
+        mime_type=r[5],
+        file_size=r[6],
+        thumbnail_path=r[7],
+        created_at=r[8],
+    )
+
+
+async def insert_content(
     *,
     title: str,
     body: str | None,
@@ -54,8 +68,8 @@ def insert_content(
     embedding: NDArray[np.float32],
 ) -> ContentRow:
     content_id = uuid.uuid4()
-    with get_conn() as conn:
-        row = conn.execute(
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             """
             INSERT INTO content (
                 id, title, body, content_type, source_path,
@@ -76,100 +90,80 @@ def insert_content(
                 thumbnail_path,
                 embedding,
             ),
-        ).fetchone()
-    return ContentRow(
-        id=row[0],
-        title=row[1],
-        body=row[2],
-        content_type=row[3],
-        source_path=row[4],
-        mime_type=row[5],
-        file_size=row[6],
-        thumbnail_path=row[7],
-        created_at=row[8],
-    )
+        )
+        row = await cur.fetchone()
+    return _row_to_content_row(row)
 
 
-def get_content(content_id: uuid.UUID) -> ContentRow | None:
-    with get_conn() as conn:
-        row = conn.execute(
+async def get_content(content_id: uuid.UUID) -> ContentRow | None:
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             """
             SELECT id, title, body, content_type, source_path,
                    mime_type, file_size, thumbnail_path, created_at
             FROM content WHERE id = %s
             """,
             (content_id,),
-        ).fetchone()
-    if row is None:
-        return None
-    return ContentRow(
-        id=row[0],
-        title=row[1],
-        body=row[2],
-        content_type=row[3],
-        source_path=row[4],
-        mime_type=row[5],
-        file_size=row[6],
-        thumbnail_path=row[7],
-        created_at=row[8],
-    )
+        )
+        row = await cur.fetchone()
+    return None if row is None else _row_to_content_row(row)
 
 
-def list_content() -> list[ContentRow]:
-    with get_conn() as conn:
-        rows = conn.execute(
+async def list_content() -> list[ContentRow]:
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             """
             SELECT id, title, body, content_type, source_path,
                    mime_type, file_size, thumbnail_path, created_at
             FROM content ORDER BY created_at DESC
             """
-        ).fetchall()
-    return [
-        ContentRow(
-            id=r[0], title=r[1], body=r[2], content_type=r[3], source_path=r[4],
-            mime_type=r[5], file_size=r[6], thumbnail_path=r[7], created_at=r[8],
         )
-        for r in rows
-    ]
+        rows = await cur.fetchall()
+    return [_row_to_content_row(r) for r in rows]
 
 
-def delete_content(content_id: uuid.UUID) -> DeletedPaths | None:
+async def delete_content(content_id: uuid.UUID) -> DeletedPaths | None:
     """Delete a content row and return the file paths the caller should unlink."""
-    with get_conn() as conn:
-        row = conn.execute(
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             "SELECT source_path, thumbnail_path FROM content WHERE id = %s",
             (content_id,),
-        ).fetchone()
+        )
+        row = await cur.fetchone()
         if row is None:
             return None
-        conn.execute("DELETE FROM content WHERE id = %s", (content_id,))
+        await conn.execute("DELETE FROM content WHERE id = %s", (content_id,))
     return DeletedPaths(source_path=row[0], thumbnail_path=row[1])
 
 
-def insert_link(*, from_id: uuid.UUID, to_id: uuid.UUID) -> None:
-    with get_conn() as conn:
-        conn.execute(
+async def insert_link(*, from_id: uuid.UUID, to_id: uuid.UUID) -> None:
+    async with aget_conn() as conn:
+        await conn.execute(
             "INSERT INTO content_links (from_id, to_id) VALUES (%s, %s)",
             (from_id, to_id),
         )
 
 
-def fetch_graph() -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    with get_conn() as conn:
-        nodes = conn.execute(
+async def fetch_graph() -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             "SELECT id, title, content_type FROM content ORDER BY created_at DESC"
-        ).fetchall()
-        edges = conn.execute("SELECT from_id, to_id FROM content_links").fetchall()
+        )
+        nodes = await cur.fetchall()
+        cur = await conn.execute("SELECT from_id, to_id FROM content_links")
+        edges = await cur.fetchall()
 
     node_list = [{"id": str(n[0]), "title": n[1], "content_type": n[2]} for n in nodes]
     edge_list = [{"from": str(e[0]), "to": str(e[1])} for e in edges]
     return node_list, edge_list
 
 
-def fetch_links_adjacency() -> dict[str, list[str]]:
-    with get_conn() as conn:
-        all_nodes = conn.execute("SELECT id FROM content").fetchall()
-        rows = conn.execute("SELECT from_id, to_id FROM content_links").fetchall()
+async def fetch_links_adjacency() -> dict[str, list[str]]:
+    async with aget_conn() as conn:
+        cur = await conn.execute("SELECT id FROM content")
+        all_nodes = await cur.fetchall()
+        cur = await conn.execute("SELECT from_id, to_id FROM content_links")
+        rows = await cur.fetchall()
 
     graph: dict[str, list[str]] = {str(node_id[0]): [] for node_id in all_nodes}
     for from_id, to_id in rows:
@@ -177,32 +171,34 @@ def fetch_links_adjacency() -> dict[str, list[str]]:
     return graph
 
 
-def upsert_pageranks(pageranks: dict[str, float]) -> int:
+async def upsert_pageranks(pageranks: dict[str, float]) -> int:
     if not pageranks:
         return 0
 
     values = [(uuid.UUID(k), float(v)) for k, v in pageranks.items()]
 
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.executemany(
-            """
-            INSERT INTO content_rank (content_id, pagerank)
-            VALUES (%s, %s)
-            ON CONFLICT (content_id) DO UPDATE SET pagerank = EXCLUDED.pagerank
-            """,
-            values,
-        )
+    async with aget_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.executemany(
+                """
+                INSERT INTO content_rank (content_id, pagerank)
+                VALUES (%s, %s)
+                ON CONFLICT (content_id) DO UPDATE SET pagerank = EXCLUDED.pagerank
+                """,
+                values,
+            )
 
     return len(values)
 
 
-def get_max_pagerank() -> float:
-    with get_conn() as conn:
-        row = conn.execute("SELECT COALESCE(MAX(pagerank), 0) FROM content_rank").fetchone()
+async def get_max_pagerank() -> float:
+    async with aget_conn() as conn:
+        cur = await conn.execute("SELECT COALESCE(MAX(pagerank), 0) FROM content_rank")
+        row = await cur.fetchone()
     return float(row[0] or 0.0)
 
 
-def hybrid_candidates(
+async def hybrid_candidates(
     *,
     query_embedding: NDArray[np.float32],
     query_text: str,
@@ -214,8 +210,8 @@ def hybrid_candidates(
     an `fts_rank` (from FTS), or both (when a row matches in both).
     Downstream scoring combines both signals with PageRank and freshness.
     """
-    with get_conn() as conn:
-        rows = conn.execute(
+    async with aget_conn() as conn:
+        cur = await conn.execute(
             """
             WITH semantic AS (
                 SELECT c.id,
@@ -249,7 +245,8 @@ def hybrid_candidates(
             LEFT JOIN content_rank r ON r.content_id = c.id
             """,
             {"vec": query_embedding, "q": query_text, "limit": limit},
-        ).fetchall()
+        )
+        rows = await cur.fetchall()
 
     return [
         SearchCandidate(

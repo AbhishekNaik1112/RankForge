@@ -138,7 +138,8 @@ def check_endpoint_shapes() -> None:
     subsection("GET /health")
     r = _http.get(BASE,"/health")
     print(f"  {r}")
-    assert r == {"ok": True}
+    assert r.get("ok") is True
+    assert "model_ready" in r
 
     subsection("GET /content (list, first 2)")
     items = _http.get(BASE,"/content")

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
+
+# psycopg's async mode requires the Selector event loop on Windows.
+# Must be set before uvicorn creates its loop.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import structlog
 from fastapi import FastAPI, Request
 
+from db.client import close_pool, open_pool
 from db.init_db import init_db
 from routes.content import router as content_router
 from routes.graph import router as graph_router
@@ -24,7 +32,12 @@ async def lifespan(_app: FastAPI):
     logger.info("startup", log_dir=os.environ.get("LOG_DIR"))
 
     # Apply pending migrations (idempotent; no-op if already at HEAD).
+    # Sync — runs once at startup, alembic isn't async-aware.
     init_db()
+
+    # Open the async DB pool. Routes/repository require this.
+    await open_pool()
+    logger.info("pool_open")
 
     # Eager-load the embedding model so the first ingest doesn't block ~30 s.
     # /health reports model_ready=False until this completes.
@@ -33,6 +46,7 @@ async def lifespan(_app: FastAPI):
 
     yield
 
+    await close_pool()
     logger.info("shutdown")
 
 

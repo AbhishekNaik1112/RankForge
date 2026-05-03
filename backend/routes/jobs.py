@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, Query
 
@@ -12,21 +14,22 @@ logger = structlog.get_logger(__name__)
 
 
 @router.post("/jobs/pagerank")
-def run_pagerank_job():
+async def run_pagerank_job():
     logger.info("pagerank_start")
-    graph = fetch_links_adjacency()
-    ranks = compute_pagerank(graph)
-    updated = upsert_pageranks(ranks)
+    graph = await fetch_links_adjacency()
+    # compute_pagerank is pure-Python CPU work; offload so we don't block the loop.
+    ranks = await asyncio.to_thread(compute_pagerank, graph)
+    updated = await upsert_pageranks(ranks)
     logger.info("pagerank_done", nodes=len(ranks), updated=updated)
     return {"ok": True, "updated": updated, "nodes": len(ranks)}
 
 
 @router.get("/ranked-results")
-def ranked_results(
+async def ranked_results(
     q: str = Query(min_length=1, description="Search query"),
     limit: int = Query(default=None, ge=1, le=50),
 ):
     # Thin alias of /content/search
     if limit is None:
-        return search_content(q=q)
-    return search_content(q=q, limit=limit)
+        return await search_content(q=q)
+    return await search_content(q=q, limit=limit)

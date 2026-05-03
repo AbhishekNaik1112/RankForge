@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from pathlib import Path
@@ -107,7 +108,7 @@ def _guess_mime(content_type: str, path: Path) -> str | None:
 
 
 @router.post("/content/ingest", response_model=ContentResponse)
-def ingest_file(payload: IngestFileRequest):
+async def ingest_file(payload: IngestFileRequest):
     src = Path(payload.source_path)
     if not src.is_file():
         raise HTTPException(status_code=400, detail=f"File not found: {payload.source_path}")
@@ -122,21 +123,21 @@ def ingest_file(payload: IngestFileRequest):
     mime_type = _guess_mime(content_type, src)
 
     if content_type == "image":
-        embedding = embed_image(src)
+        embedding = await asyncio.to_thread(embed_image, src)
         body = None
-        thumb = make_thumbnail(src, src.parent)
+        thumb = await asyncio.to_thread(make_thumbnail, src, src.parent)
         thumbnail_path = str(thumb)
     else:
-        body = extract_body(src, content_type)
+        body = await asyncio.to_thread(extract_body, src, content_type)
         if not body.strip():
             raise HTTPException(
                 status_code=422,
                 detail=f"No extractable text in {content_type} file (scanned PDFs are not supported).",
             )
-        embedding = embed_text(body)
+        embedding = await asyncio.to_thread(embed_text, body)
         thumbnail_path = None
 
-    row = insert_content(
+    row = await insert_content(
         title=title,
         body=body,
         content_type=content_type,
@@ -157,9 +158,9 @@ def ingest_file(payload: IngestFileRequest):
 
 
 @router.post("/content/paste", response_model=ContentResponse)
-def ingest_text(payload: IngestTextRequest):
-    embedding = embed_text(f"{payload.title}\n{payload.body}")
-    row = insert_content(
+async def ingest_text(payload: IngestTextRequest):
+    embedding = await asyncio.to_thread(embed_text, f"{payload.title}\n{payload.body}")
+    row = await insert_content(
         title=payload.title,
         body=payload.body,
         content_type="text",
@@ -173,23 +174,25 @@ def ingest_text(payload: IngestTextRequest):
 
 
 @router.get("/content", response_model=list[ContentResponse])
-def list_all_content():
-    return [_to_response(r) for r in list_content()]
+async def list_all_content():
+    return [_to_response(r) for r in await list_content()]
 
 
 @router.get("/content/search", response_model=list[SearchResult])
-def search_content(
+async def search_content(
     q: str = Query(min_length=1, description="Search query"),
     limit: int = Query(default=SEARCH_LIMIT, ge=1, le=50),
     candidates: int = Query(default=SEARCH_CANDIDATES, ge=1, le=500),
 ):
-    query_vec = embed_text(q)
-    rows = hybrid_candidates(query_embedding=query_vec, query_text=q, limit=candidates)
+    query_vec = await asyncio.to_thread(embed_text, q)
+    rows = await hybrid_candidates(
+        query_embedding=query_vec, query_text=q, limit=candidates
+    )
 
     if not rows:
         return []
 
-    max_pr = get_max_pagerank()
+    max_pr = await get_max_pagerank()
     max_fts = max((r.fts_rank for r in rows if r.fts_rank is not None), default=0.0)
 
     results: list[SearchResult] = []
@@ -236,16 +239,16 @@ def search_content(
 
 
 @router.get("/content/{content_id}", response_model=ContentResponse)
-def read_content(content_id: uuid.UUID):
-    row = get_content(content_id)
+async def read_content(content_id: uuid.UUID):
+    row = await get_content(content_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Content not found")
     return _to_response(row)
 
 
 @router.delete("/content/{content_id}")
-def remove_content(content_id: uuid.UUID):
-    paths = delete_content(content_id)
+async def remove_content(content_id: uuid.UUID):
+    paths = await delete_content(content_id)
     if paths is None:
         raise HTTPException(status_code=404, detail="Content not found")
 
