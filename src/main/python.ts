@@ -154,10 +154,22 @@ export function isPythonRunning(): boolean {
   return pythonProcess !== null && !pythonProcess.killed
 }
 
+let isShuttingDown = false
+
 export function killPython(): void {
-  if (!pythonProcess) return
+  if (!pythonProcess || isShuttingDown) return
+  isShuttingDown = true
 
   console.log('[backend] Shutting down Python process...')
+
+  // Wire cleanup before signaling so we never miss the exit notification.
+  let forceKillTimer: NodeJS.Timeout | undefined
+  pythonProcess.on('exit', () => {
+    if (forceKillTimer) clearTimeout(forceKillTimer)
+    pythonProcess = null
+    pythonPort = null
+    isShuttingDown = false
+  })
 
   if (process.platform === 'win32') {
     // Windows: use taskkill to ensure the process tree is killed
@@ -170,16 +182,10 @@ export function killPython(): void {
   }
 
   // Force kill after 5 seconds if still alive
-  const forceKillTimer = setTimeout(() => {
+  forceKillTimer = setTimeout(() => {
     if (pythonProcess && !pythonProcess.killed) {
       console.log('[backend] Force killing Python process...')
       pythonProcess.kill('SIGKILL')
     }
   }, 5000)
-
-  pythonProcess.on('exit', () => {
-    clearTimeout(forceKillTimer)
-    pythonProcess = null
-    pythonPort = null
-  })
 }
