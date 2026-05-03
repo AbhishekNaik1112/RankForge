@@ -62,11 +62,17 @@ Max single file size: **50 MB** (enforced at the IPC boundary).
    # Edit backend/.env — paste your Neon pooled connection string into DATABASE_URL
    ```
 
-5. Initialize the schema (⚠️ this is destructive; drops existing tables):
+5. (Optional) Pre-apply DB migrations. The Electron app calls this automatically on
+   startup, so you only need to run it manually if you want to verify connectivity
+   before launching:
    ```bash
    cd backend
    python -m db.init_db
    cd ..
+   ```
+   This is **idempotent** (safe to re-run). To wipe and rebuild during development:
+   ```bash
+   python -m db.init_db --reset
    ```
 
 6. (Optional) Pre-download the ~600 MB CLIP model so the first ingest isn't slow:

@@ -1,6 +1,15 @@
 -- RankForge schema v2: multimodal ingestion + FTS
--- This file is destructive. Running init_db.py drops all tables.
--- Acceptable because the app is pre-launch with no production data.
+--
+-- ⚠️  This file is now a CONSOLIDATED REFERENCE only — it is NOT executed
+-- at runtime. Schema changes go through Alembic migrations under
+-- backend/db/migrations/versions/. The FastAPI lifespan calls
+-- backend/db/init_db.py:init_db() on startup, which applies pending
+-- migrations idempotently. Use `python -m db.init_db --reset` to wipe
+-- and rebuild during development.
+--
+-- This file is kept up-to-date as a single-place reference for the
+-- current consolidated schema (every column + index after all
+-- migrations are applied). Update it whenever you add a migration.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 

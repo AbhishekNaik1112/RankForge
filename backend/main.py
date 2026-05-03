@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request
 
+from db.init_db import init_db
 from routes.content import router as content_router
 from routes.graph import router as graph_router
 from routes.jobs import router as jobs_router
@@ -21,6 +22,9 @@ logger = structlog.get_logger("rankforge.app")
 async def lifespan(_app: FastAPI):
     setup_logging(log_dir=os.environ.get("LOG_DIR") or None)
     logger.info("startup", log_dir=os.environ.get("LOG_DIR"))
+
+    # Apply pending migrations (idempotent; no-op if already at HEAD).
+    init_db()
 
     # Eager-load the embedding model so the first ingest doesn't block ~30 s.
     # /health reports model_ready=False until this completes.
