@@ -126,13 +126,21 @@ export async function waitForReady(timeoutMs = 120_000): Promise<void> {
 
   const url = `http://127.0.0.1:${pythonPort}/health`
   const start = Date.now()
+  let httpReachable = false
 
   while (Date.now() - start < timeoutMs) {
     try {
       const response = await fetch(url)
       if (response.ok) {
-        console.log(`[backend] Ready on port ${pythonPort}`)
-        return
+        const body = (await response.json()) as { ok?: boolean; model_ready?: boolean }
+        if (!httpReachable) {
+          httpReachable = true
+          console.log(`[backend] HTTP up on port ${pythonPort}; waiting for AI model...`)
+        }
+        if (body.model_ready) {
+          console.log(`[backend] Ready on port ${pythonPort}`)
+          return
+        }
       }
     } catch {
       // Not ready yet
@@ -142,7 +150,8 @@ export async function waitForReady(timeoutMs = 120_000): Promise<void> {
 
   throw new Error(
     `Backend did not become ready within ${timeoutMs / 1000}s. ` +
-    'This may happen on first launch while the AI model downloads (~80MB).'
+    'On first launch this can happen while the CLIP model downloads (~600 MB). ' +
+    'Pre-download with: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer(\'clip-ViT-B-32\')"'
   )
 }
 

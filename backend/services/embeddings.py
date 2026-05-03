@@ -13,10 +13,26 @@ from settings import EMBEDDING_MODEL
 # CLIP models produce 512-dim embeddings; pure-text models like MiniLM produce 384.
 # Downstream code expects 512 (matches the DB VECTOR(512) column).
 
+_model_loaded = False
+
 
 @lru_cache(maxsize=1)
 def _get_model() -> SentenceTransformer:
-    return SentenceTransformer(EMBEDDING_MODEL)
+    global _model_loaded
+    model = SentenceTransformer(EMBEDDING_MODEL)
+    _model_loaded = True
+    return model
+
+
+def is_model_loaded() -> bool:
+    """True once the embedding model has been instantiated and is ready to encode."""
+    return _model_loaded
+
+
+def warmup() -> None:
+    """Eagerly load the model. Called from FastAPI lifespan so the first ingest
+    doesn't pay the ~30 s cold-start cost. Safe to call multiple times."""
+    _get_model()
 
 
 def embed_text(text: str) -> NDArray[np.float32]:
