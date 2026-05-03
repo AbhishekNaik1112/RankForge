@@ -80,22 +80,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-app:     var(--zinc-950);
-    --bg-panel:   var(--zinc-900);
-    --bg-muted:   var(--zinc-800);
-    --bg-subtle:  #0b0b0d;
-    --bg-hover:   var(--zinc-800);
+    color-scheme: dark;
 
-    --fg-primary:   var(--zinc-50);
-    --fg-secondary: var(--zinc-300);
-    --fg-muted:     var(--zinc-400);
-    --fg-subtle:    var(--zinc-500);
+    --bg-app:     #0a0a0b;        /* slightly warmer than zinc-950 */
+    --bg-panel:   #131316;        /* one notch above bg-app */
+    --bg-muted:   #1c1c20;
+    --bg-subtle:  #0e0e10;
+    --bg-hover:   #1f1f24;
 
-    --border-subtle: var(--zinc-800);
-    --border-strong: var(--zinc-700);
+    --fg-primary:   #f4f4f5;
+    --fg-secondary: #d4d4d8;
+    --fg-muted:     #9a9aa3;
+    --fg-subtle:    #6b6b75;
 
-    --accent:       var(--indigo-500);
-    --accent-hover: var(--indigo-400);
+    --border-subtle: #1f1f24;
+    --border-strong: #2c2c33;
+
+    --accent:       var(--indigo-400);    /* lighter accent reads better on dark */
+    --accent-hover: #a5b4fc;               /* indigo-300 */
     --accent-soft:  color-mix(in srgb, var(--indigo-400) 16%, transparent);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);

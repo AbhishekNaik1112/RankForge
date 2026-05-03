@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session } from 'electron'
+import { app, BrowserWindow, dialog, Menu, session } from 'electron'
 import { join } from 'path'
 import { is, optimizer } from '@electron-toolkit/utils'
 import { isConfigured } from './config'
@@ -7,14 +7,30 @@ import { registerIpcHandlers } from './ipc'
 
 let mainWindow: BrowserWindow | null = null
 
+function getIconPath(): string | undefined {
+  // In dev: resources/icon.png at the repo root.
+  // In production: electron-builder copies build resources into the app's
+  // resources folder; the icon ends up alongside the renderer assets.
+  if (is.dev) {
+    return join(app.getAppPath(), 'resources', 'icon.png')
+  }
+  // electron-builder bakes the icon into the executable on Windows; we still
+  // pass the bundled resource path as a fallback for the runtime icon.
+  const bundled = join(process.resourcesPath, 'icon.png')
+  return bundled
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
+    width: 1280,
+    height: 820,
+    minWidth: 880,
     minHeight: 600,
     title: 'RankForge',
     show: false,
+    backgroundColor: '#0a0a0b',
+    icon: getIconPath(),
+    autoHideMenuBar: true,  // tap Alt to reveal if anyone needs it
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -23,6 +39,10 @@ function createWindow(): BrowserWindow {
       webviewTag: false
     }
   })
+
+  // Drop the default Electron application menu (File / Edit / View / Window /
+  // Help). It's generic noise for a focused single-window app.
+  win.setMenu(null)
 
   win.on('ready-to-show', () => {
     win.show()
@@ -56,6 +76,10 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
+  // Drop the default app menu globally too (Electron may apply it before
+  // any window-level setMenu(null) runs on macOS).
+  Menu.setApplicationMenu(null)
+
   // Optimize DevTools shortcuts in dev mode
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

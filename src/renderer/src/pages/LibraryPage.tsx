@@ -36,12 +36,12 @@ export function LibraryPage({ onOpen, refreshKey }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <header>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em' }}>
           Library
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-muted)' }}>
+        <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--fg-muted)' }}>
           {loading
-            ? 'Loading...'
+            ? 'Loading…'
             : `${items.length} item${items.length === 1 ? '' : 's'}`}
         </p>
       </header>

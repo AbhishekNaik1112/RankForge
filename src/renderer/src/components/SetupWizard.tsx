@@ -1,6 +1,7 @@
-import { Database, ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { setupBackend } from '../lib/api'
+import { BrandMark } from './BrandMark'
 
 interface Props {
   onConfigured: () => void
@@ -59,26 +60,20 @@ export function SetupWizard({ onConfigured }: Props) {
           boxShadow: 'var(--shadow-lg)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <div
-            aria-hidden
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-              display: 'grid',
-              placeItems: 'center'
-            }}
-          >
-            <Database size={20} strokeWidth={2} />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+          <BrandMark size={42} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 24,
+                fontWeight: 600,
+                letterSpacing: '-0.018em'
+              }}
+            >
               Welcome to RankForge
             </h1>
-            <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--fg-muted)' }}>
+            <p style={{ margin: '3px 0 0', fontSize: 13.5, color: 'var(--fg-muted)' }}>
               One-time setup — connect to your database
             </p>
           </div>
@@ -170,10 +165,10 @@ export function SetupWizard({ onConfigured }: Props) {
             >
               {submitting ? (
                 <>
-                  <Loader2 size={14} className="rf-spin" /> Starting backend...
+                  <Loader2 size={14} className="rf-spin" /> Starting backend…
                 </>
               ) : (
-                'Connect and start'
+                'Connect & Start'
               )}
             </button>
           </div>

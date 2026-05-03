@@ -1,3 +1,4 @@
+import { FileText, Image as ImageIcon, Sparkles, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ResultCard } from '../components/ResultCard'
 import { SearchBar } from '../components/SearchBar'
@@ -12,6 +13,7 @@ export function SearchPage({ onOpen }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
+  const [hasSearched, setHasSearched] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -23,6 +25,7 @@ export function SearchPage({ onOpen }: Props) {
     if (!q) return
     setLoading(true)
     setError(null)
+    setHasSearched(true)
     try {
       const items = await searchContent(q)
       setResults(items)
@@ -36,12 +39,28 @@ export function SearchPage({ onOpen }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <header>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>
-          Search
+      <header style={{ marginBottom: 4 }}>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 30,
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.15
+          }}
+        >
+          Search Your Knowledge
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-muted)' }}>
-          Hybrid ranking: semantic meaning + keyword match + authority + freshness
+        <p
+          style={{
+            margin: '8px 0 0',
+            fontSize: 14,
+            color: 'var(--fg-muted)',
+            maxWidth: 540
+          }}
+        >
+          Hybrid ranking blends semantic meaning, keyword match, graph
+          authority &amp; freshness — across every doc, image, and page.
         </p>
       </header>
 
@@ -51,17 +70,17 @@ export function SearchPage({ onOpen }: Props) {
         onChange={setQuery}
         onSubmit={runSearch}
         loading={loading}
-        placeholder="Try 'machine learning' or a concept you've ingested..."
       />
 
       {error ? (
         <div
           role="alert"
+          aria-live="polite"
           style={{
-            padding: '10px 14px',
+            padding: '11px 14px',
             fontSize: 13,
-            color: '#b91c1c',
-            background: 'color-mix(in srgb, #ef4444 10%, var(--bg-panel))',
+            color: '#fca5a5',
+            background: 'color-mix(in srgb, #ef4444 12%, transparent)',
             border: '1px solid color-mix(in srgb, #ef4444 30%, transparent)',
             borderRadius: 'var(--radius-md)'
           }}
@@ -70,8 +89,10 @@ export function SearchPage({ onOpen }: Props) {
         </div>
       ) : null}
 
-      {!loading && results.length === 0 && !error ? (
-        <EmptyHint query={query} />
+      {!hasSearched && !error ? <DropHint /> : null}
+
+      {hasSearched && !loading && results.length === 0 && !error ? (
+        <NoResults query={query} />
       ) : null}
 
       {results.length > 0 ? (
@@ -85,21 +106,123 @@ export function SearchPage({ onOpen }: Props) {
   )
 }
 
-function EmptyHint({ query }: { query: string }) {
+/** Pre-search empty state. Reads as a real drop target. */
+function DropHint() {
   return (
     <div
       style={{
-        padding: 'var(--space-12) var(--space-6)',
+        marginTop: 8,
+        padding: 'var(--space-10) var(--space-6)',
+        background:
+          'linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent)',
+        border: '1.5px dashed var(--border-strong)',
+        borderRadius: 'var(--radius-xl)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 14,
+        textAlign: 'center'
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--accent-soft)',
+          color: 'var(--accent)',
+          display: 'grid',
+          placeItems: 'center'
+        }}
+      >
+        <Upload size={22} strokeWidth={2} />
+      </div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--fg-primary)' }}>
+          Drop files anywhere on the window
+        </div>
+        <div
+          style={{
+            margin: '6px 0 0',
+            fontSize: 13,
+            color: 'var(--fg-muted)',
+            maxWidth: 460,
+            lineHeight: 1.55
+          }}
+        >
+          Text, Markdown, PDF, Word, PowerPoint, or images. Each gets chunked,
+          embedded, and indexed — then search across all of it from this box.
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          color: 'var(--fg-subtle)',
+          fontSize: 12
+        }}
+      >
+        <SupportChip icon={FileText} label=".txt &middot; .md &middot; .pdf" />
+        <SupportChip icon={FileText} label=".docx &middot; .pptx" />
+        <SupportChip icon={ImageIcon} label=".png &middot; .jpg &middot; .webp" />
+      </div>
+    </div>
+  )
+}
+
+function SupportChip({
+  icon: Icon,
+  label
+}: {
+  icon: typeof Upload
+  label: string
+}) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 10px',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 999
+      }}
+    >
+      <Icon size={11} strokeWidth={2} aria-hidden />
+      {label}
+    </span>
+  )
+}
+
+/** Post-search empty state — different copy from DropHint. */
+function NoResults({ query }: { query: string }) {
+  return (
+    <div
+      style={{
+        padding: 'var(--space-10) var(--space-6)',
         textAlign: 'center',
         color: 'var(--fg-muted)',
-        border: '1px dashed var(--border-subtle)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-lg)',
         fontSize: 14
       }}
     >
-      {query.trim()
-        ? 'No results yet — hit Enter to search.'
-        : 'Drop files anywhere on the window, then search across their meaning and keywords.'}
+      <Sparkles
+        size={20}
+        strokeWidth={1.8}
+        aria-hidden
+        style={{ display: 'block', margin: '0 auto 10px', color: 'var(--fg-subtle)' }}
+      />
+      <div style={{ fontSize: 15, color: 'var(--fg-secondary)', fontWeight: 500 }}>
+        No results for “{query}”
+      </div>
+      <div style={{ marginTop: 6 }}>
+        Try different words, or drop more files to expand what RankForge can search.
+      </div>
     </div>
   )
 }

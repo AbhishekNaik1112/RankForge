@@ -31,13 +31,13 @@ export function GraphPage({ refreshKey }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <header>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em' }}>
           Graph
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-muted)' }}>
+        <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--fg-muted)' }}>
           {loading
-            ? 'Loading graph...'
-            : `${graph.nodes.length} nodes, ${graph.edges.length} edges`}
+            ? 'Loading graph…'
+            : `${graph.nodes.length} nodes · ${graph.edges.length} edges`}
         </p>
       </header>
 

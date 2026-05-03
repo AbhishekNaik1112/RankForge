@@ -41,10 +41,34 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle ambient gradient on the main canvas — adds depth without
+ * shouting. Two soft radial spots in indigo and violet at very low
+ * opacity, anchored to the corners so any size window picks them up. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px circle at 8% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%),
+    radial-gradient(900px circle at 100% 100%, color-mix(in srgb, #8b5cf6 8%, transparent), transparent 55%);
+  z-index: 0;
 }
 
 #root {
   height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+/* Headings get balanced wrapping for a nicer ragged edge on multi-line
+ * titles (Vercel guidelines). */
+h1, h2, h3 {
+  text-wrap: balance;
+  letter-spacing: -0.012em;
 }
 
 /* Accessible focus rings for keyboard navigation */

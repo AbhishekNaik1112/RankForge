@@ -15,6 +15,7 @@ export const SearchBar = forwardRef<HTMLInputElement, Props>(function SearchBar(
 ) {
   return (
     <form
+      role="search"
       onSubmit={(e) => {
         e.preventDefault()
         onSubmit()
@@ -22,13 +23,14 @@ export const SearchBar = forwardRef<HTMLInputElement, Props>(function SearchBar(
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 14px',
+        gap: 12,
+        padding: '12px 14px',
         background: 'var(--bg-panel)',
         border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-lg)',
+        borderRadius: 12,
         boxShadow: 'var(--shadow-sm)',
-        transition: `border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease)`
+        transition:
+          'border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease)'
       }}
       onFocusCapture={(e) => {
         e.currentTarget.style.borderColor = 'var(--accent)'
@@ -39,21 +41,24 @@ export const SearchBar = forwardRef<HTMLInputElement, Props>(function SearchBar(
         e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
       }}
     >
-      <Search size={16} strokeWidth={2} color="var(--fg-muted)" aria-hidden />
+      <Search size={17} strokeWidth={2.2} color="var(--fg-muted)" aria-hidden />
       <input
         ref={ref}
-        type="text"
+        type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? 'Search your knowledge...'}
+        placeholder={placeholder ?? 'Search across everything you’ve ingested…'}
         aria-label="Search"
+        autoComplete="off"
+        spellCheck={false}
         style={{
           flex: 1,
+          minWidth: 0,
           border: 'none',
           outline: 'none',
           background: 'transparent',
           color: 'var(--fg-primary)',
-          fontSize: 14,
+          fontSize: 14.5,
           fontFamily: 'var(--font-sans)'
         }}
       />
@@ -61,8 +66,8 @@ export const SearchBar = forwardRef<HTMLInputElement, Props>(function SearchBar(
         type="submit"
         disabled={loading || !value.trim()}
         style={{
-          padding: '6px 14px',
-          fontSize: 12,
+          padding: '7px 16px',
+          fontSize: 13,
           fontWeight: 500,
           color: 'var(--fg-on-accent)',
           background: 'var(--accent)',
@@ -70,16 +75,18 @@ export const SearchBar = forwardRef<HTMLInputElement, Props>(function SearchBar(
           borderRadius: 'var(--radius-md)',
           cursor: loading || !value.trim() ? 'not-allowed' : 'pointer',
           opacity: loading || !value.trim() ? 0.55 : 1,
-          transition: `background var(--duration-fast) var(--ease)`
+          transition: 'background var(--duration-fast) var(--ease)'
         }}
         onMouseEnter={(e) => {
-          if (!e.currentTarget.disabled) e.currentTarget.style.background = 'var(--accent-hover)'
+          if (!e.currentTarget.disabled)
+            e.currentTarget.style.background = 'var(--accent-hover)'
         }}
         onMouseLeave={(e) => {
-          if (!e.currentTarget.disabled) e.currentTarget.style.background = 'var(--accent)'
+          if (!e.currentTarget.disabled)
+            e.currentTarget.style.background = 'var(--accent)'
         }}
       >
-        {loading ? 'Searching...' : 'Search'}
+        {loading ? 'Searching…' : 'Search'}
       </button>
     </form>
   )
