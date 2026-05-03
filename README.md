@@ -135,3 +135,14 @@ npm run package    # Produce platform installers in dist/ (NSIS/DMG/AppImage)
 - CLIP first-run download (~600 MB) produces no visible loading state in the UI
 - `init_db.py` is destructive; no migration tool (alembic, etc.) yet
 - `/graph` fetches all content without pagination
+
+See [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) for the perf backlog and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full improvement plan.
+
+## Documentation
+
+| File | Purpose |
+|---|---|
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Prioritized improvement plan — start here for next steps |
+| [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | 16 known perf issues with file refs and fix estimates |
+| [`docs/Project Details.md`](docs/Project%20Details.md) | Original product spec, durable constraints |
+| [`docs/STEP_BY_STEP_GUIDE.md`](docs/STEP_BY_STEP_GUIDE.md) | Original implementation guide (partially superseded) |
