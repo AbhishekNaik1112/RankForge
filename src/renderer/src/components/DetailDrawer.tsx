@@ -134,10 +134,15 @@ export function DetailDrawer({ item, onClose, onDelete }: Props) {
                 alt={item.title}
                 decoding="async"
                 style={{
-                  width: '100%',
+                  // Show at natural size, capped to container width / 480 px tall.
+                  // `width: 100%` (the previous behavior) upscaled small images
+                  // and looked zoomed/blurry.
+                  display: 'block',
+                  margin: '0 auto',
+                  maxWidth: '100%',
                   maxHeight: isImage ? 480 : 320,
-                  objectFit: 'contain',
-                  display: 'block'
+                  width: 'auto',
+                  height: 'auto'
                 }}
               />
               {isImage ? (

@@ -88,15 +88,26 @@ async function findPythonExecutable(backendDir: string): Promise<string> {
   )
 }
 
-export async function spawnPython(): Promise<void> {
-  const port = await findFreePort()
-  const backendDir = getBackendDir()
+interface ResolvedPythonCommand {
+  command: string
+  args: string[]
+  backendDir: string
+}
 
-  // Production: use the PyInstaller-bundled exe (no Python on PATH needed).
-  // Development: fall back to a venv/system Python running run.py.
+/** Resolve which Python entry point to spawn. Pulled out of spawnPython so
+ * one-shot tools (e.g. validateDatabaseUrl) can reuse the exact same
+ * resolution: bundled exe in production, venv/system Python + run.py in dev. */
+async function resolvePythonCommand(): Promise<ResolvedPythonCommand> {
+  const backendDir = getBackendDir()
   const bundled = findBundledBackend(backendDir)
   const command = bundled ?? (await findPythonExecutable(backendDir))
   const args = bundled ? [] : ['run.py']
+  return { command, args, backendDir }
+}
+
+export async function spawnPython(): Promise<void> {
+  const port = await findFreePort()
+  const { command, args, backendDir } = await resolvePythonCommand()
 
   pythonPort = port
 
@@ -176,6 +187,84 @@ export async function waitForReady(timeoutMs = 120_000): Promise<void> {
 
 export function getPythonPort(): number | null {
   return pythonPort
+}
+
+/** Validate a DATABASE_URL by spawning the same Python entry point with
+ * `--validate-db`. Short-circuits before uvicorn/torch load — the bundled
+ * exe still has a ~3 s cold-start in production, but that's acceptable for
+ * an interactive button. URL goes via env (never argv) to avoid leaking it
+ * via the OS process list. */
+export async function validateDatabaseUrl(
+  url: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!url || !url.trim()) {
+    return { ok: false, error: 'DATABASE_URL is empty' }
+  }
+
+  const { command, args, backendDir } = await resolvePythonCommand()
+  const validateArgs = [...args, '--validate-db']
+
+  return new Promise((resolve) => {
+    const child = spawn(command, validateArgs, {
+      cwd: backendDir,
+      env: { ...process.env, DATABASE_URL: url },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32'
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let done = false
+
+    function finish(result: { ok: boolean; error?: string }): void {
+      if (done) return
+      done = true
+      try {
+        child.kill()
+      } catch {
+        // already exited
+      }
+      resolve(result)
+    }
+
+    child.stdout?.on('data', (d: Buffer) => {
+      stdout += d.toString()
+    })
+    child.stderr?.on('data', (d: Buffer) => {
+      stderr += d.toString()
+    })
+
+    child.on('error', (err) => {
+      finish({ ok: false, error: err.message || 'Failed to spawn validator' })
+    })
+
+    child.on('exit', (code) => {
+      // Last non-empty line is the structured marker. The PyInstaller exe may
+      // emit warnings/info above it; we scan from the bottom.
+      const lines = stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      const marker = [...lines].reverse().find(
+        (l) => l.startsWith('VALIDATION_OK') || l.startsWith('VALIDATION_ERROR')
+      )
+      if (marker === 'VALIDATION_OK') {
+        finish({ ok: true })
+      } else if (marker?.startsWith('VALIDATION_ERROR')) {
+        finish({ ok: false, error: marker.replace(/^VALIDATION_ERROR:\s*/, '') })
+      } else {
+        finish({
+          ok: false,
+          error:
+            stderr.trim() ||
+            `Validator exited with code ${code} without a result marker`
+        })
+      }
+    })
+
+    // Hard timeout — psycopg's connect_timeout=8s, plus exe cold-start in
+    // production (~3s), plus margin.
+    setTimeout(() => {
+      finish({ ok: false, error: 'Validation timed out after 15 seconds' })
+    }, 15_000)
+  })
 }
 
 export function isPythonRunning(): boolean {

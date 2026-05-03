@@ -42,6 +42,13 @@ for pkg in (
     "starlette",
     "pydantic",
     "pydantic_core",
+    # OCR fallback for scanned PDFs (lazy-imported inside extractors.py)
+    "rapidocr_onnxruntime",
+    "onnxruntime",
+    "fitz",          # PyMuPDF imports as `fitz`
+    "shapely",
+    "pyclipper",
+    "cv2",           # opencv-python — pulled in by rapidocr-onnxruntime
 ):
     # collect_all returns (datas, binaries, hiddenimports) — note the order.
     d, b, h = collect_all(pkg)
@@ -52,6 +59,9 @@ for pkg in (
 # Belt-and-suspenders for things torch/transformers load lazily
 hiddenimports += collect_submodules("torch")
 hiddenimports += collect_submodules("transformers")
+# RapidOCR's detection/recognition/classification modules are loaded by name
+# at runtime — PyInstaller's import scanner doesn't see them statically.
+hiddenimports += collect_submodules("rapidocr_onnxruntime")
 
 # Project-local data files that aren't auto-detected by import scanning.
 # Paths are relative to backend/ (we run pyinstaller from there).

@@ -28,6 +28,8 @@ const api: IpcApi = {
   isConfigured: () => ipcRenderer.invoke('is-configured'),
   getConfig: () => ipcRenderer.invoke('get-config'),
   setupBackend: (payload) => ipcRenderer.invoke('setup-backend', payload),
+  validateDatabaseUrl: (url: string) => ipcRenderer.invoke('validate-database-url', url),
+  restartApp: () => ipcRenderer.invoke('restart-app'),
 
   // Auto-update — manual triggers + a subscribe method that returns an
   // unsubscribe fn. The renderer hook calls onUpdateEvent in useEffect

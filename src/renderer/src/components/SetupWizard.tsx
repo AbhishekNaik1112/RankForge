@@ -1,32 +1,64 @@
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { Check, ExternalLink, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
-import { setupBackend } from '../lib/api'
+import { setupBackend, validateDatabaseUrl } from '../lib/api'
 import { BrandMark } from './BrandMark'
 
 interface Props {
   onConfigured: () => void
 }
 
+type TestState =
+  | { kind: 'idle' }
+  | { kind: 'testing' }
+  | { kind: 'success' }
+  | { kind: 'error'; message: string }
+
 /**
  * First-run wizard. Asks for the Neon DATABASE_URL, saves it to
  * userData/config.json via IPC, and triggers the backend spawn.
- *
- * Validation is intentionally minimal — basic format check only.
- * The real test is whether the backend starts; if it doesn't, we
- * surface the error and let the user re-enter.
  */
 export function SetupWizard({ onConfigured }: Props) {
   const [url, setUrl] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [testState, setTestState] = useState<TestState>({ kind: 'idle' })
 
   const looksValid = /^postgres(ql)?:\/\/.+@.+\/.+/.test(url.trim())
+
+  // Reset the test result when the URL changes — old result no longer applies.
+  function handleUrlChange(value: string): void {
+    setUrl(value)
+    if (testState.kind !== 'idle') setTestState({ kind: 'idle' })
+  }
+
+  async function handleTest(): Promise<void> {
+    const trimmed = url.trim()
+    if (!trimmed) return
+    setTestState({ kind: 'testing' })
+    try {
+      const result = await validateDatabaseUrl(trimmed)
+      if (result.ok) {
+        setTestState({ kind: 'success' })
+      } else {
+        setTestState({ kind: 'error', message: result.error ?? 'Connection failed' })
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection test failed'
+      setTestState({ kind: 'error', message })
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!looksValid) {
       setError('Looks like that URL is missing a piece — expected postgresql://user:password@host/dbname')
       return
+    }
+    if (testState.kind === 'error') {
+      const proceed = window.confirm(
+        `Connection test failed: ${testState.message}\n\nSave anyway? The backend will fail to start.`
+      )
+      if (!proceed) return
     }
     setSubmitting(true)
     setError(null)
@@ -105,7 +137,7 @@ export function SetupWizard({ onConfigured }: Props) {
             id="db-url"
             type="password"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => handleUrlChange(e.target.value)}
             placeholder="postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
             disabled={submitting}
             autoFocus
@@ -123,7 +155,46 @@ export function SetupWizard({ onConfigured }: Props) {
               outline: 'none'
             }}
           />
-          <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--fg-subtle)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              marginTop: 10,
+              flexWrap: 'wrap'
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={!url.trim() || testState.kind === 'testing' || submitting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '7px 14px',
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: 'var(--fg-primary)',
+                background: 'var(--bg-panel)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-md)',
+                cursor:
+                  !url.trim() || testState.kind === 'testing' || submitting
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity: !url.trim() || testState.kind === 'testing' || submitting ? 0.6 : 1
+              }}
+            >
+              {testState.kind === 'testing' ? (
+                <Loader2 size={13} className="rf-spin" />
+              ) : null}
+              {testState.kind === 'testing' ? 'Testing…' : 'Test connection'}
+            </button>
+            <TestResult state={testState} />
+          </div>
+
+          <p style={{ margin: '10px 0 0', fontSize: 11, color: 'var(--fg-subtle)' }}>
             Stored locally in <code className="font-mono">userData/config.json</code>. Never sent anywhere except your database.
           </p>
 
@@ -180,5 +251,40 @@ export function SetupWizard({ onConfigured }: Props) {
         </p>
       </div>
     </div>
+  )
+}
+
+function TestResult({ state }: { state: TestState }) {
+  if (state.kind === 'idle' || state.kind === 'testing') return null
+  if (state.kind === 'success') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          fontSize: 12.5,
+          color: '#16a34a'
+        }}
+      >
+        <Check size={13} strokeWidth={2.4} /> Connected
+      </span>
+    )
+  }
+  return (
+    <span
+      role="alert"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        fontSize: 12.5,
+        color: '#dc2626',
+        maxWidth: 360,
+        wordBreak: 'break-word'
+      }}
+    >
+      <X size={13} strokeWidth={2.4} style={{ flexShrink: 0 }} /> {state.message}
+    </span>
   )
 }

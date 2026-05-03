@@ -35,3 +35,5 @@ export const deleteOrphanFiles = (paths: string[]) => window.api.deleteOrphanFil
 export const isConfigured = () => window.api.isConfigured()
 export const setupBackend = (payload: { databaseUrl: string }) =>
   window.api.setupBackend(payload)
+export const validateDatabaseUrl = (url: string) => window.api.validateDatabaseUrl(url)
+export const restartApp = () => window.api.restartApp()

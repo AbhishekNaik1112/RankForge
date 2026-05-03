@@ -1,6 +1,6 @@
 {
   "name": "rankforge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Multimodal semantic + keyword search over a personal knowledge graph",
   "main": "./out/main/index.js",

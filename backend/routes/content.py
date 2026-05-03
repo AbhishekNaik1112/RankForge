@@ -19,6 +19,7 @@ from services.ranking import (
     fts_rank_to_score,
     rrf_score,
 )
+from services.reranker import rerank
 from services.repository import (
     ContentRow,
     delete_content,
@@ -31,6 +32,7 @@ from services.repository import (
 )
 from services.thumbnails import make_thumbnail
 from settings import (
+    RERANKER_TOP_N,
     RRF_K,
     SEARCH_CANDIDATES,
     SEARCH_LIMIT,
@@ -150,10 +152,12 @@ async def ingest_file(payload: IngestFileRequest):
     else:
         body = await asyncio.to_thread(extract_body, src, content_type)
         if not body.strip():
-            raise HTTPException(
-                status_code=422,
-                detail=f"No extractable text in {content_type} file (scanned PDFs are not supported).",
+            detail = (
+                "No extractable text found (PDF appears empty or unreadable, even after OCR)."
+                if content_type == "pdf"
+                else f"No extractable text in {content_type} file."
             )
+            raise HTTPException(status_code=422, detail=detail)
         # Text content lives in chunks. Parent row stores the body for
         # display; embedding stays NULL — search hits content_chunks.
         embedding = None
@@ -313,10 +317,33 @@ async def search_content(
         )
 
     results.sort(key=lambda r: r.final_score, reverse=True)
+
+    # Cross-encoder rerank: rescore the top-N (query, doc) pairs jointly and
+    # reorder. RRF gives us a strong coarse list; the reranker catches the
+    # semantic nuance bag-of-signals fusion can miss. final_score stays as the
+    # RRF value (display unchanged); only the ordering of the head shifts.
+    if RERANKER_TOP_N > 0 and len(results) > 1:
+        head_n = min(RERANKER_TOP_N, len(results))
+        head = results[:head_n]
+        tail = results[head_n:]
+        docs = [
+            (r.id, r.matched_chunk or f"{r.title}\n{(r.body or '')[:512]}")
+            for r in head
+        ]
+        try:
+            new_order = await asyncio.to_thread(rerank, q_norm, docs, len(docs))
+            by_id = {r.id: r for r in head}
+            head = [by_id[i] for i in new_order if i in by_id]
+            results = head + tail
+        except Exception as e:  # noqa: BLE001
+            # Reranker failure shouldn't sink the search — log and serve RRF.
+            logger.warning("rerank_failed", error=str(e))
+
     logger.info(
         "search",
         query=q_norm,
         candidates=len(rows),
+        reranked=min(RERANKER_TOP_N, len(results)) if RERANKER_TOP_N > 0 else 0,
         returned=min(limit, len(results)),
         top_score=results[0].final_score if results else None,
     )

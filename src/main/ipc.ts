@@ -2,7 +2,13 @@ import { app, ipcMain, net, shell } from 'electron'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { isConfigured, readConfig, writeConfig } from './config'
-import { getPythonPort, isPythonRunning, spawnPython, waitForReady } from './python'
+import {
+  getPythonPort,
+  isPythonRunning,
+  spawnPython,
+  validateDatabaseUrl,
+  waitForReady
+} from './python'
 import { deleteFileIfExists, saveDroppedFile, scanOrphanFiles } from './files'
 import { checkForUpdates, downloadUpdate, quitAndInstall } from './updater'
 import type { IngestFilePayload, IngestTextPayload } from '../shared/types'
@@ -164,6 +170,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('check-for-updates', async () => checkForUpdates())
   ipcMain.handle('download-update', async () => downloadUpdate())
   ipcMain.handle('quit-and-install', () => quitAndInstall())
+
+  ipcMain.handle('validate-database-url', async (_event, url: string) => {
+    if (typeof url !== 'string') throw new Error('validate-database-url requires a string')
+    return validateDatabaseUrl(url)
+  })
+
+  ipcMain.handle('restart-app', async () => {
+    app.relaunch()
+    app.exit(0)
+  })
 
   ipcMain.handle('setup-backend', async (_event, payload: { databaseUrl: string }) => {
     const url = payload?.databaseUrl?.trim()

@@ -40,6 +40,10 @@ SEARCH_LIMIT = _get_int("SEARCH_LIMIT", 10)
 # (Elastic, OpenSearch, Azure). Lower values give early ranks more weight.
 RRF_K = _get_int("RRF_K", 60)
 
+# Cross-encoder reranker reorders the top-K RRF candidates. Set to 0 to
+# disable (useful for A/B benchmarking against pure RRF in diag.py).
+RERANKER_TOP_N = _get_int("RERANKER_TOP_N", 15)
+
 
 def require_database_url() -> str:
     if not DATABASE_URL:

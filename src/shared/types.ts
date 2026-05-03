@@ -88,6 +88,8 @@ export interface IpcApi {
   setupBackend: (payload: {
     databaseUrl: string
   }) => Promise<{ ok: boolean; restartRequired: boolean }>
+  validateDatabaseUrl: (url: string) => Promise<{ ok: boolean; error?: string }>
+  restartApp: () => Promise<void>
 
   // Auto-update
   checkForUpdates: () => Promise<{ ok: boolean; reason?: string }>

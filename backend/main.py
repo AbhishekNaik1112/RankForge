@@ -19,8 +19,9 @@ from db.init_db import init_db
 from routes.content import router as content_router
 from routes.graph import router as graph_router
 from routes.jobs import router as jobs_router
-from services.embeddings import is_model_loaded, warmup
+from services.embeddings import is_model_loaded as embeddings_loaded, warmup as embeddings_warmup
 from services.logging import setup_logging
+from services.reranker import is_model_loaded as reranker_loaded, warmup as reranker_warmup
 
 
 logger = structlog.get_logger("rankforge.app")
@@ -40,9 +41,15 @@ async def lifespan(_app: FastAPI):
     logger.info("pool_open")
 
     # Eager-load the embedding model so the first ingest doesn't block ~30 s.
-    # /health reports model_ready=False until this completes.
-    warmup()
-    logger.info("model_loaded")
+    # /health reports model_ready=False until both this AND the reranker are loaded.
+    embeddings_warmup()
+    logger.info("embeddings_loaded")
+
+    # Cross-encoder reranker (BAAI/bge-reranker-v2-m3, ~568 MB). Loaded after
+    # the embedding model so the splash screen completes the bigger download
+    # first; startup time grows by ~5-10 s on warm cache, ~30 s on cold.
+    reranker_warmup()
+    logger.info("reranker_loaded")
 
     yield
 
@@ -75,4 +82,12 @@ app.include_router(jobs_router)
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model_ready": is_model_loaded()}
+    # model_ready flips true only when BOTH the embedding model and the
+    # reranker are loaded — the splash screen / waitForReady polls this
+    # and unblocks the UI when it's true.
+    return {
+        "ok": True,
+        "model_ready": embeddings_loaded() and reranker_loaded(),
+        "embeddings_ready": embeddings_loaded(),
+        "reranker_ready": reranker_loaded(),
+    }

@@ -37,7 +37,7 @@ def read_text_file(path: str | Path) -> str:
     return Path(path).read_text(encoding="utf-8", errors="replace")
 
 
-def extract_text_from_pdf(path: str | Path) -> str:
+def _pypdf_extract(path: str | Path) -> str:
     reader = PdfReader(str(path))
     parts: list[str] = []
     for page in reader.pages:
@@ -45,6 +45,19 @@ def extract_text_from_pdf(path: str | Path) -> str:
         if text.strip():
             parts.append(text)
     return "\n\n".join(parts)
+
+
+def extract_text_from_pdf(path: str | Path) -> str:
+    """Pypdf first (fast for typed PDFs). Falls back to RapidOCR for scans
+    where pypdf returns nothing. OCR import is lazy so the cold-import cost
+    is paid only by users who actually hit a scanned PDF."""
+    text = _pypdf_extract(path)
+    if text.strip():
+        return text
+    # Empty body → likely a scanned PDF. Try OCR.
+    from services.ocr import ocr_pdf  # noqa: WPS433  (lazy: heavy deps)
+
+    return ocr_pdf(Path(path))
 
 
 def extract_text_from_docx(path: str | Path) -> str:

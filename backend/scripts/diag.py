@@ -140,6 +140,10 @@ def check_endpoint_shapes() -> None:
     print(f"  {r}")
     assert r.get("ok") is True
     assert "model_ready" in r
+    # Cross-encoder reranker (F1) — health surfaces it as a separate flag.
+    if "reranker_ready" in r:
+        print(f"  reranker_ready: {r['reranker_ready']}")
+        assert r["reranker_ready"] is True, "reranker model failed to load"
 
     subsection("GET /content (list, first 2)")
     items = _http.get(BASE,"/content")

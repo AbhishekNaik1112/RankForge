@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { DetailDrawer } from './components/DetailDrawer'
 import { DropZone } from './components/DropZone'
 import { ImageDescriptionModal } from './components/ImageDescriptionModal'
@@ -16,10 +16,15 @@ import { useSelectedItem } from './hooks/useSelectedItem'
 import { useSidebar } from './hooks/useSidebar'
 import { useTheme } from './hooks/useTheme'
 import { useUpdater } from './hooks/useUpdater'
-import { GraphPage } from './pages/GraphPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SearchPage } from './pages/SearchPage'
 import { SettingsPage } from './pages/SettingsPage'
+
+// Lazy-load the Graph route — pulls in ReactFlow + dagre (~300 KB) only when
+// the user navigates to it, not on every cold start.
+const GraphPage = lazy(() =>
+  import('./pages/GraphPage').then((m) => ({ default: m.GraphPage }))
+)
 
 type Bootstate = 'checking' | 'wizard' | 'ready'
 
@@ -89,6 +94,11 @@ function MainShell() {
   const { selectedItem, openItem, closeItem, handleDelete } = useSelectedItem(bumpAfterDelete)
   const { mode: sidebarMode, setMode: setSidebarMode } = useSidebarContext()
   const [pendingImage, setPendingImage] = useState<File | null>(null)
+  // Mirror of pendingImage for synchronous read inside resolveImage. Without
+  // this, a fast Save+Skip (or Save+Esc) double-fire would see the stale
+  // pendingImage in both closures and ingest the same file twice before
+  // React commits the setPendingImage(null) update.
+  const pendingImageRef = useRef<File | null>(null)
 
   // Single-image ingest goes through a description-prompt gate so the user
   // can attach a caption that becomes searchable text. Multi-file batches
@@ -96,6 +106,7 @@ function MainShell() {
   const gatedIngest = useCallback(
     (files: File[]) => {
       if (files.length === 1 && files[0].type.startsWith('image/')) {
+        pendingImageRef.current = files[0]
         setPendingImage(files[0])
         return
       }
@@ -106,14 +117,26 @@ function MainShell() {
 
   const resolveImage = useCallback(
     (description: string | null) => {
-      const file = pendingImage
+      const file = pendingImageRef.current
+      if (!file) return // already resolved by an earlier call this tick
+      pendingImageRef.current = null
       setPendingImage(null)
-      if (file) void ingestFiles([file], { description })
+      void ingestFiles([file], { description })
     },
-    [pendingImage, ingestFiles]
+    [ingestFiles]
   )
 
-  const onClipboardImage = useCallback((file: File) => gatedIngest([file]), [gatedIngest])
+  const onClipboardImage = useCallback(
+    (file: File) => {
+      // If the description modal is already open, ignore the second paste.
+      // Otherwise the running flow gets re-triggered (the modal's textarea
+      // is focused, so pasting from clipboard while it's open would fire the
+      // document-level handler again and stack ingestions).
+      if (pendingImage) return
+      gatedIngest([file])
+    },
+    [pendingImage, gatedIngest]
+  )
   useClipboardPaste(onClipboardImage)
 
   return (
@@ -153,7 +176,11 @@ function MainShell() {
                 refreshKey={refreshKey}
               />
             )}
-            {page === 'graph' && <GraphPage refreshKey={refreshKey} onOpen={openItem} />}
+            {page === 'graph' && (
+              <Suspense fallback={<GraphPageSkeleton />}>
+                <GraphPage refreshKey={refreshKey} onOpen={openItem} />
+              </Suspense>
+            )}
             {page === 'settings' && <SettingsPage />}
           </div>
         </main>
@@ -163,6 +190,23 @@ function MainShell() {
       <ImageDescriptionModal file={pendingImage} onResolve={resolveImage} />
       <DetailDrawer item={selectedItem} onClose={closeItem} onDelete={handleDelete} />
       <IngestToasts log={ingestLog} />
+    </div>
+  )
+}
+
+function GraphPageSkeleton() {
+  return (
+    <div
+      style={{
+        padding: 'var(--space-12)',
+        textAlign: 'center',
+        color: 'var(--fg-muted)',
+        fontSize: 14,
+        border: '1px dashed var(--border-subtle)',
+        borderRadius: 'var(--radius-lg)'
+      }}
+    >
+      Loading graph…
     </div>
   )
 }

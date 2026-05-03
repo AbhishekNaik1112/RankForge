@@ -1,3 +1,4 @@
+import { Check, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useSidebarContext } from '../hooks/sidebarContext'
 import { useThemeContext } from '../hooks/themeContext'
@@ -8,8 +9,35 @@ import {
   deleteOrphanFiles,
   findOrphanFiles,
   openLogDir,
-  recomputePagerank
+  recomputePagerank,
+  restartApp,
+  setupBackend,
+  validateDatabaseUrl
 } from '../lib/api'
+
+type DbTestState =
+  | { kind: 'idle' }
+  | { kind: 'testing' }
+  | { kind: 'success' }
+  | { kind: 'error'; message: string }
+
+interface DatabaseEditorState {
+  editing: boolean
+  url: string
+  saving: boolean
+  test: DbTestState
+  saved: boolean
+  error: string | null
+}
+
+const INITIAL_DB_STATE: DatabaseEditorState = {
+  editing: false,
+  url: '',
+  saving: false,
+  test: { kind: 'idle' },
+  saved: false,
+  error: null
+}
 
 interface OrphanState {
   scanning: boolean
@@ -32,9 +60,73 @@ export function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [logMessage, setLogMessage] = useState<string | null>(null)
   const [orphanState, setOrphanState] = useState<OrphanState>(INITIAL_ORPHAN_STATE)
+  const [dbState, setDbState] = useState<DatabaseEditorState>(INITIAL_DB_STATE)
   const { status: updateStatus, check: checkForUpdates } = useUpdaterContext()
   const { preference: themePref, setPreference: setThemePref } = useThemeContext()
   const { mode: sidebarMode, setMode: setSidebarMode } = useSidebarContext()
+
+  function startEditingDb(): void {
+    setDbState({ ...INITIAL_DB_STATE, editing: true })
+  }
+
+  function cancelEditingDb(): void {
+    setDbState(INITIAL_DB_STATE)
+  }
+
+  function handleDbUrlChange(value: string): void {
+    setDbState((s) => ({
+      ...s,
+      url: value,
+      // Reset stale test result when URL changes.
+      test: s.test.kind === 'idle' ? s.test : { kind: 'idle' },
+      saved: false,
+      error: null
+    }))
+  }
+
+  async function handleDbTest(): Promise<void> {
+    const trimmed = dbState.url.trim()
+    if (!trimmed) return
+    setDbState((s) => ({ ...s, test: { kind: 'testing' } }))
+    try {
+      const result = await validateDatabaseUrl(trimmed)
+      setDbState((s) => ({
+        ...s,
+        test: result.ok
+          ? { kind: 'success' }
+          : { kind: 'error', message: result.error ?? 'Connection failed' }
+      }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connection test failed'
+      setDbState((s) => ({ ...s, test: { kind: 'error', message } }))
+    }
+  }
+
+  async function handleDbSave(): Promise<void> {
+    const trimmed = dbState.url.trim()
+    if (!trimmed) return
+    if (dbState.test.kind === 'error') {
+      const proceed = window.confirm(
+        `Connection test failed: ${dbState.test.message}\n\nSave anyway? RankForge will fail to start with this URL until it's fixed.`
+      )
+      if (!proceed) return
+    }
+    setDbState((s) => ({ ...s, saving: true, error: null }))
+    try {
+      // Reuses the wizard's setup-backend handler. Returns restartRequired:true
+      // when the backend is already running with the old URL — which is always
+      // the case here, since Settings is only reachable after first-run.
+      await setupBackend({ databaseUrl: trimmed })
+      setDbState((s) => ({ ...s, saving: false, saved: true }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not save database URL'
+      setDbState((s) => ({ ...s, saving: false, error: message }))
+    }
+  }
+
+  async function handleRestart(): Promise<void> {
+    await restartApp()
+  }
 
   async function handleScanOrphans() {
     setOrphanState({ ...INITIAL_ORPHAN_STATE, scanning: true })
@@ -107,6 +199,18 @@ export function SettingsPage() {
           Runtime info and maintenance actions
         </p>
       </header>
+
+      <Section title="Database">
+        <DatabaseEditor
+          state={dbState}
+          onStart={startEditingDb}
+          onCancel={cancelEditingDb}
+          onUrlChange={handleDbUrlChange}
+          onTest={handleDbTest}
+          onSave={handleDbSave}
+          onRestart={handleRestart}
+        />
+      </Section>
 
       <Section title="Appearance">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -297,6 +401,242 @@ export function SettingsPage() {
         </dl>
       </Section>
     </div>
+  )
+}
+
+interface DatabaseEditorProps {
+  state: DatabaseEditorState
+  onStart: () => void
+  onCancel: () => void
+  onUrlChange: (v: string) => void
+  onTest: () => void
+  onSave: () => void
+  onRestart: () => void
+}
+
+function DatabaseEditor({
+  state,
+  onStart,
+  onCancel,
+  onUrlChange,
+  onTest,
+  onSave,
+  onRestart
+}: DatabaseEditorProps) {
+  if (!state.editing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--fg-secondary)' }}>
+          Database URL:{' '}
+          <code className="font-mono" style={{ color: 'var(--fg-primary)' }}>
+            ••••configured••••
+          </code>
+        </div>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          Stored at <code className="font-mono">userData/config.json</code>. Changing it requires a
+          restart so the connection pool re-initializes.
+        </p>
+        <div>
+          <button
+            type="button"
+            onClick={onStart}
+            style={{
+              marginTop: 4,
+              padding: '7px 14px',
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: 'var(--fg-primary)',
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer'
+            }}
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (state.saved) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontSize: 13, color: 'var(--fg-secondary)' }}>
+          Database URL saved. Restart RankForge to apply — the new connection pool initializes at
+          startup.
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            type="button"
+            onClick={onRestart}
+            style={{
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--fg-on-accent)',
+              background: 'var(--accent)',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer'
+            }}
+          >
+            Restart now
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--fg-secondary)',
+              background: 'transparent',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer'
+            }}
+          >
+            Restart later
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <input
+        type="password"
+        value={state.url}
+        onChange={(e) => onUrlChange(e.target.value)}
+        placeholder="postgresql://user:password@host/dbname?sslmode=require"
+        autoFocus
+        spellCheck={false}
+        disabled={state.saving}
+        style={{
+          width: '100%',
+          height: 38,
+          padding: '0 12px',
+          fontSize: 12.5,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--fg-primary)',
+          background: 'var(--bg-app)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-md)',
+          outline: 'none'
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={onTest}
+          disabled={!state.url.trim() || state.test.kind === 'testing' || state.saving}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 14px',
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: 'var(--fg-primary)',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)',
+            cursor:
+              !state.url.trim() || state.test.kind === 'testing' || state.saving
+                ? 'not-allowed'
+                : 'pointer',
+            opacity:
+              !state.url.trim() || state.test.kind === 'testing' || state.saving ? 0.6 : 1
+          }}
+        >
+          {state.test.kind === 'testing' ? <Loader2 size={13} className="rf-spin" /> : null}
+          {state.test.kind === 'testing' ? 'Testing…' : 'Test connection'}
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!state.url.trim() || state.saving || state.test.kind === 'testing'}
+          style={{
+            padding: '7px 14px',
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: 'var(--fg-on-accent)',
+            background: 'var(--accent)',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            cursor:
+              !state.url.trim() || state.saving || state.test.kind === 'testing'
+                ? 'not-allowed'
+                : 'pointer',
+            opacity:
+              !state.url.trim() || state.saving || state.test.kind === 'testing' ? 0.6 : 1
+          }}
+        >
+          {state.saving ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={state.saving}
+          style={{
+            padding: '7px 14px',
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: 'var(--fg-secondary)',
+            background: 'transparent',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)',
+            cursor: state.saving ? 'not-allowed' : 'pointer',
+            opacity: state.saving ? 0.6 : 1
+          }}
+        >
+          Cancel
+        </button>
+        <DbTestResultLine state={state.test} />
+      </div>
+      {state.error ? (
+        <div role="alert" style={{ fontSize: 12.5, color: '#dc2626' }}>
+          {state.error}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function DbTestResultLine({ state }: { state: DbTestState }) {
+  if (state.kind === 'idle' || state.kind === 'testing') return null
+  if (state.kind === 'success') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          fontSize: 12.5,
+          color: '#16a34a'
+        }}
+      >
+        <Check size={13} strokeWidth={2.4} /> Connected
+      </span>
+    )
+  }
+  return (
+    <span
+      role="alert"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        fontSize: 12.5,
+        color: '#dc2626',
+        maxWidth: 360,
+        wordBreak: 'break-word'
+      }}
+    >
+      <X size={13} strokeWidth={2.4} style={{ flexShrink: 0 }} /> {state.message}
+    </span>
   )
 }
 
