@@ -1,4 +1,6 @@
-import { ipcMain, net } from 'electron'
+import { app, ipcMain, net, shell } from 'electron'
+import { mkdir } from 'fs/promises'
+import { join } from 'path'
 import { getPythonPort } from './python'
 import { saveDroppedFile } from './files'
 import type { IngestFilePayload, IngestTextPayload } from '../shared/types'
@@ -88,5 +90,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-python-status', async () => {
     const port = getPythonPort()
     return { running: port !== null, port }
+  })
+
+  ipcMain.handle('open-log-dir', async () => {
+    const logDir = join(app.getPath('userData'), 'logs')
+    await mkdir(logDir, { recursive: true })
+    const error = await shell.openPath(logDir)
+    return { ok: error === '', error: error || undefined }
   })
 }

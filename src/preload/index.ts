@@ -14,7 +14,9 @@ const api: IpcApi = {
   recomputePagerank: () => ipcRenderer.invoke('recompute-pagerank'),
 
   getHealth: () => ipcRenderer.invoke('get-health'),
-  getPythonStatus: () => ipcRenderer.invoke('get-python-status')
+  getPythonStatus: () => ipcRenderer.invoke('get-python-status'),
+
+  openLogDir: () => ipcRenderer.invoke('open-log-dir')
 }
 
 contextBridge.exposeInMainWorld('api', api)

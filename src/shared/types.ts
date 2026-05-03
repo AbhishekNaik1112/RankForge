@@ -70,6 +70,9 @@ export interface IpcApi {
   recomputePagerank: () => Promise<{ updated: number }>
 
   // Status
-  getHealth: () => Promise<{ ok: boolean }>
+  getHealth: () => Promise<{ ok: boolean; model_ready?: boolean }>
   getPythonStatus: () => Promise<{ running: boolean; port: number | null }>
+
+  // Diagnostics
+  openLogDir: () => Promise<{ ok: boolean; error?: string }>
 }

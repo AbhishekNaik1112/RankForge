@@ -88,7 +88,8 @@ export async function spawnPython(): Promise<void> {
   const env = {
     ...process.env,
     HOST: '127.0.0.1',
-    PORT: String(port)
+    PORT: String(port),
+    LOG_DIR: join(app.getPath('userData'), 'logs')
   }
 
   pythonProcess = spawn(

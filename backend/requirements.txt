@@ -6,6 +6,7 @@ sentence-transformers>=3.0
 numpy>=1.26
 python-dotenv>=1.0
 pydantic>=2.6
+structlog>=24.0
 
 # Multimodal ingestion
 pypdf>=4.0

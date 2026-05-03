@@ -28,3 +28,4 @@ export const ingestFile = (payload: IngestFilePayload) => window.api.ingestFile(
 export const ingestText = (payload: IngestTextPayload) => window.api.ingestText(payload)
 export const deleteContent = (id: string) => window.api.deleteContent(id)
 export const recomputePagerank = () => window.api.recomputePagerank()
+export const openLogDir = () => window.api.openLogDir()

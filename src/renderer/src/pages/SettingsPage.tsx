@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { recomputePagerank } from '../lib/api'
+import { openLogDir, recomputePagerank } from '../lib/api'
 
 export function SettingsPage() {
   const [recomputing, setRecomputing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [logMessage, setLogMessage] = useState<string | null>(null)
 
   async function handleRecompute() {
     setRecomputing(true)
@@ -15,6 +16,18 @@ export function SettingsPage() {
       setMessage(err instanceof Error ? err.message : 'PageRank recompute failed')
     } finally {
       setRecomputing(false)
+    }
+  }
+
+  async function handleOpenLogs() {
+    setLogMessage(null)
+    try {
+      const result = await openLogDir()
+      if (!result.ok && result.error) {
+        setLogMessage(`Could not open log folder: ${result.error}`)
+      }
+    } catch (err) {
+      setLogMessage(err instanceof Error ? err.message : 'Failed to open log folder')
     }
   }
 
@@ -71,6 +84,33 @@ export function SettingsPage() {
         {message ? (
           <div style={{ marginTop: 10, fontSize: 13, color: 'var(--fg-secondary)' }}>
             {message}
+          </div>
+        ) : null}
+      </Section>
+
+      <Section title="Diagnostics">
+        <button
+          type="button"
+          onClick={handleOpenLogs}
+          style={{
+            padding: '8px 14px',
+            fontSize: 13,
+            fontWeight: 500,
+            color: 'var(--fg-primary)',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer'
+          }}
+        >
+          Open log folder
+        </button>
+        <p style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+          Backend logs are written to <code className="font-mono">userData/logs/rankforge.jsonl</code>.
+        </p>
+        {logMessage ? (
+          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--fg-secondary)' }}>
+            {logMessage}
           </div>
         ) : null}
       </Section>

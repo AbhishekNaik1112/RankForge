@@ -4,6 +4,7 @@ import os
 import uuid
 from pathlib import Path
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -35,6 +36,7 @@ from settings import (
 )
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
 
 class IngestFileRequest(BaseModel):
@@ -144,6 +146,13 @@ def ingest_file(payload: IngestFileRequest):
         thumbnail_path=thumbnail_path,
         embedding=embedding,
     )
+    logger.info(
+        "ingest_file",
+        id=str(row.id),
+        content_type=content_type,
+        file_size=file_size,
+        body_chars=len(body) if body else 0,
+    )
     return _to_response(row)
 
 
@@ -216,6 +225,13 @@ def search_content(
         )
 
     results.sort(key=lambda r: r.final_score, reverse=True)
+    logger.info(
+        "search",
+        query=q,
+        candidates=len(rows),
+        returned=min(limit, len(results)),
+        top_score=results[0].final_score if results else None,
+    )
     return results[:limit]
 
 
