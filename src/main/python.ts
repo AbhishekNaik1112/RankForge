@@ -12,7 +12,15 @@ function getBackendDir(): string {
   if (is.dev) {
     return join(app.getAppPath(), 'backend')
   }
+  // Packaged: extraResources copies the PyInstaller dist folder here.
   return join(process.resourcesPath, 'backend')
+}
+
+/** Look for the PyInstaller-bundled backend exe shipped in production builds. */
+function findBundledBackend(backendDir: string): string | null {
+  if (process.platform !== 'win32') return null  // Win-only for now
+  const candidate = join(backendDir, 'rankforge_backend.exe')
+  return existsSync(candidate) ? candidate : null
 }
 
 async function findFreePort(): Promise<number> {
@@ -81,7 +89,12 @@ async function findPythonExecutable(backendDir: string): Promise<string> {
 export async function spawnPython(): Promise<void> {
   const port = await findFreePort()
   const backendDir = getBackendDir()
-  const pythonExe = await findPythonExecutable(backendDir)
+
+  // Production: use the PyInstaller-bundled exe (no Python on PATH needed).
+  // Development: fall back to a venv/system Python running run.py.
+  const bundled = findBundledBackend(backendDir)
+  const command = bundled ?? (await findPythonExecutable(backendDir))
+  const args = bundled ? [] : ['run.py']
 
   pythonPort = port
 
@@ -92,19 +105,12 @@ export async function spawnPython(): Promise<void> {
     LOG_DIR: join(app.getPath('userData'), 'logs')
   }
 
-  pythonProcess = spawn(
-    pythonExe,
-    // Launch via run.py (not `-m uvicorn`) so the asyncio event-loop policy
-    // can be set before uvicorn creates its loop. Required on Windows for
-    // psycopg's async mode.
-    ['run.py'],
-    {
-      cwd: backendDir,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32'
-    }
-  )
+  pythonProcess = spawn(command, args, {
+    cwd: backendDir,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: process.platform === 'win32'
+  })
 
   pythonProcess.stdout?.on('data', (data: Buffer) => {
     console.log(`[backend] ${data.toString().trim()}`)

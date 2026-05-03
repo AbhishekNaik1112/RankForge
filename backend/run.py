@@ -27,10 +27,14 @@ if sys.platform == "win32":
 
 import uvicorn  # noqa: E402  (after policy set)
 
+# Import the app directly (not as the "main:app" string) so PyInstaller's
+# import scanner picks it up and bundles main.py + its transitive deps.
+from main import app  # noqa: E402
+
 
 async def _serve() -> None:
     config = uvicorn.Config(
-        "main:app",
+        app,
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", "8000")),
         loop="asyncio",

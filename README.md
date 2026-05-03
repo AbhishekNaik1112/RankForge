@@ -116,10 +116,29 @@ python -m backend.scripts.diag
 
 ## Build
 
+For development:
+
 ```bash
 npm run build      # Build main / preload / renderer bundles into out/
-npm run package    # Produce platform installers in dist/ (NSIS/DMG/AppImage)
 ```
+
+For a shippable release installer (Windows `.exe`), produce the PyInstaller
+backend bundle first, then the Electron installer:
+
+```bash
+# 1. Bundle the Python backend (~5-8 minutes; output ~750 MB in backend/dist/)
+cd backend
+../.venv/Scripts/python -m PyInstaller --clean --noconfirm build_pyinstaller.spec
+cd ..
+
+# 2. Build the Electron installer (output in dist/)
+npm run package
+```
+
+The resulting `dist/RankForge-Setup-<version>.exe` is a self-contained
+installer — end users do **not** need Python or any Python deps installed.
+Bundle size is ~700 MB on disk; the CLIP model (~600 MB) downloads on
+first launch.
 
 ## Tech stack
 
