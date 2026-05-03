@@ -216,6 +216,10 @@ def check_signal_isolation() -> None:
             fr = r["freshness_boost"]
             final = r["final_score"]
             # Mark which signal contributed most of the final score
+            # The "top signal" annotation is a heuristic for diag readability
+            # only — actual ranking is RRF, where contribution is w/(k+rank)
+            # and we don't know each row's rank from the response. Use the
+            # underlying signal scores weighted by env weights as a proxy.
             contribs = {
                 "sem": 0.5 * sem,
                 "kw": 0.2 * kw,
@@ -224,7 +228,7 @@ def check_signal_isolation() -> None:
             }
             top_signal = max(contribs.items(), key=lambda x: x[1])[0]
             print(
-                f"  #{i}  {final:.3f} "
+                f"  #{i}  rrf={final:.4f} "
                 f"[top:{top_signal:3s}] "
                 f"sem={sem:.2f} kw={kw:.2f} pr={pr:.2f} fr={fr:.2f}  "
                 f"{r['title']} ({r['content_type']})"

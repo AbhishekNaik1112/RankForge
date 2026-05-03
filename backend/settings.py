@@ -36,6 +36,10 @@ WEIGHT_FRESHNESS = _get_float("WEIGHT_FRESHNESS", 0.1)
 SEARCH_CANDIDATES = _get_int("SEARCH_CANDIDATES", 50)
 SEARCH_LIMIT = _get_int("SEARCH_LIMIT", 10)
 
+# Reciprocal Rank Fusion smoothing constant. 60 is the industry default
+# (Elastic, OpenSearch, Azure). Lower values give early ranks more weight.
+RRF_K = _get_int("RRF_K", 60)
+
 
 def require_database_url() -> str:
     if not DATABASE_URL:

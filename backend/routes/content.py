@@ -13,10 +13,11 @@ from services.chunker import split as split_chunks
 from services.embeddings import embed_batch, embed_image, embed_text
 from services.extractors import detect_content_type, extract_body
 from services.ranking import (
+    compute_ranks,
     cosine_distance_to_similarity,
-    final_score,
     freshness_boost,
     fts_rank_to_score,
+    rrf_score,
 )
 from services.repository import (
     ContentRow,
@@ -30,6 +31,7 @@ from services.repository import (
 )
 from services.thumbnails import make_thumbnail
 from settings import (
+    RRF_K,
     SEARCH_CANDIDATES,
     SEARCH_LIMIT,
     WEIGHT_FRESHNESS,
@@ -216,21 +218,58 @@ async def search_content(
     max_pr = await get_max_pagerank()
     max_fts = max((r.fts_rank for r in rows if r.fts_rank is not None), default=0.0)
 
+    # Per-signal ranks within the candidate set (1-indexed; missing => no
+    # contribution from that signal). Drives RRF in rrf_score.
+    sem_ranks = compute_ranks(
+        rows, id_of=lambda r: r.id, key=lambda r: r.cosine_distance, reverse=False
+    )
+    fts_ranks = compute_ranks(
+        rows, id_of=lambda r: r.id, key=lambda r: r.fts_rank, reverse=True
+    )
+    # PageRank: every candidate is ranked (None pagerank treated as 0).
+    pr_ranks = compute_ranks(
+        rows,
+        id_of=lambda r: r.id,
+        key=lambda r: float(r.pagerank) if r.pagerank is not None else 0.0,
+        reverse=True,
+    )
+    fresh_ranks = compute_ranks(
+        rows,
+        id_of=lambda r: r.id,
+        key=lambda r: r.created_at.timestamp(),
+        reverse=True,
+    )
+
+    weights = {
+        "semantic": WEIGHT_SEMANTIC,
+        "fts": WEIGHT_FTS,
+        "pagerank": WEIGHT_PAGERANK,
+        "freshness": WEIGHT_FRESHNESS,
+    }
+
     results: list[SearchResult] = []
     for row in rows:
+        # UI-display values — the underlying signal scores normalized to [0,1]
+        # so the score-breakdown bars in ResultCard remain meaningful.
         semantic = cosine_distance_to_similarity(row.cosine_distance)
         fts = fts_rank_to_score(row.fts_rank, max_fts)
-        pr_norm = (float(row.pagerank) / max_pr) if (row.pagerank is not None and max_pr > 0) else 0.0
+        pr_norm = (
+            float(row.pagerank) / max_pr
+            if (row.pagerank is not None and max_pr > 0)
+            else 0.0
+        )
         fresh = freshness_boost(row.created_at)
-        score = final_score(
-            semantic_similarity=semantic,
-            fts_score=fts,
-            pagerank_norm=pr_norm,
-            freshness=fresh,
-            w_semantic=WEIGHT_SEMANTIC,
-            w_fts=WEIGHT_FTS,
-            w_pagerank=WEIGHT_PAGERANK,
-            w_freshness=WEIGHT_FRESHNESS,
+
+        # Actual ranking signal: RRF.
+        score = rrf_score(
+            ranks={
+                "semantic": sem_ranks.get(row.id),
+                "fts": fts_ranks.get(row.id),
+                "pagerank": pr_ranks.get(row.id),
+                "freshness": fresh_ranks.get(row.id),
+            },
+            weights=weights,
+            k=RRF_K,
         )
 
         results.append(
