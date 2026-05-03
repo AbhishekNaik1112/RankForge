@@ -1,12 +1,76 @@
 import { useState } from 'react'
+import { useSidebarContext } from '../hooks/sidebarContext'
+import { useThemeContext } from '../hooks/themeContext'
 import { useUpdaterContext } from '../hooks/updaterContext'
-import { openLogDir, recomputePagerank } from '../lib/api'
+import { SIDEBAR_MODE_OPTIONS, type SidebarMode } from '../hooks/useSidebar'
+import { THEME_OPTIONS, type ThemePreference } from '../hooks/useTheme'
+import {
+  deleteOrphanFiles,
+  findOrphanFiles,
+  openLogDir,
+  recomputePagerank
+} from '../lib/api'
+
+interface OrphanState {
+  scanning: boolean
+  deleting: boolean
+  orphans: string[] | null
+  totalBytes: number
+  message: string | null
+}
+
+const INITIAL_ORPHAN_STATE: OrphanState = {
+  scanning: false,
+  deleting: false,
+  orphans: null,
+  totalBytes: 0,
+  message: null
+}
 
 export function SettingsPage() {
   const [recomputing, setRecomputing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [logMessage, setLogMessage] = useState<string | null>(null)
+  const [orphanState, setOrphanState] = useState<OrphanState>(INITIAL_ORPHAN_STATE)
   const { status: updateStatus, check: checkForUpdates } = useUpdaterContext()
+  const { preference: themePref, setPreference: setThemePref } = useThemeContext()
+  const { mode: sidebarMode, setMode: setSidebarMode } = useSidebarContext()
+
+  async function handleScanOrphans() {
+    setOrphanState({ ...INITIAL_ORPHAN_STATE, scanning: true })
+    try {
+      const result = await findOrphanFiles()
+      setOrphanState({
+        scanning: false,
+        deleting: false,
+        orphans: result.orphans,
+        totalBytes: result.totalBytes,
+        message:
+          result.orphans.length === 0
+            ? 'No orphan files found.'
+            : `Found ${result.orphans.length} orphan file(s) — ${formatMB(result.totalBytes)}.`
+      })
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Scan failed'
+      setOrphanState({ ...INITIAL_ORPHAN_STATE, message: `Scan failed: ${detail}` })
+    }
+  }
+
+  async function handleDeleteOrphans() {
+    if (!orphanState.orphans || orphanState.orphans.length === 0) return
+    if (!window.confirm(`Delete ${orphanState.orphans.length} orphan file(s)?`)) return
+    setOrphanState((s) => ({ ...s, deleting: true }))
+    try {
+      const result = await deleteOrphanFiles(orphanState.orphans)
+      setOrphanState({
+        ...INITIAL_ORPHAN_STATE,
+        message: `Deleted ${result.deleted} orphan file(s).`
+      })
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Delete failed'
+      setOrphanState((s) => ({ ...s, deleting: false, message: `Delete failed: ${detail}` }))
+    }
+  }
 
   async function handleRecompute() {
     setRecomputing(true)
@@ -44,6 +108,14 @@ export function SettingsPage() {
         </p>
       </header>
 
+      <Section title="Appearance">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <ThemeRow value={themePref} onChange={setThemePref} />
+          <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
+          <SidebarModeRow value={sidebarMode} onChange={setSidebarMode} />
+        </div>
+      </Section>
+
       <Section title="Ranking weights">
         <p style={{ margin: 0, color: 'var(--fg-muted)', fontSize: 13 }}>
           Weights are set via environment variables in <code className="font-mono">backend/.env</code>:
@@ -65,29 +137,88 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Maintenance">
-        <button
-          type="button"
-          onClick={handleRecompute}
-          disabled={recomputing}
-          style={{
-            padding: '8px 14px',
-            fontSize: 13,
-            fontWeight: 500,
-            color: 'var(--fg-on-accent)',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            cursor: recomputing ? 'wait' : 'pointer',
-            opacity: recomputing ? 0.6 : 1
-          }}
-        >
-          {recomputing ? 'Recomputing...' : 'Recompute PageRank'}
-        </button>
-        {message ? (
-          <div style={{ marginTop: 10, fontSize: 13, color: 'var(--fg-secondary)' }}>
-            {message}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div>
+            <button
+              type="button"
+              onClick={handleRecompute}
+              disabled={recomputing}
+              style={{
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: 'var(--fg-on-accent)',
+                background: 'var(--accent)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                cursor: recomputing ? 'wait' : 'pointer',
+                opacity: recomputing ? 0.6 : 1
+              }}
+            >
+              {recomputing ? 'Recomputing…' : 'Recompute PageRank'}
+            </button>
+            {message ? (
+              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--fg-secondary)' }}>
+                {message}
+              </div>
+            ) : null}
           </div>
-        ) : null}
+
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+            <p style={{ margin: '0 0 10px', color: 'var(--fg-muted)', fontSize: 13 }}>
+              Find files in <code className="font-mono">userData/files</code> not referenced by
+              any content row. Useful after a delete that couldn't unlink the file (e.g., it was
+              open in another app).
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleScanOrphans}
+                disabled={orphanState.scanning || orphanState.deleting}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--fg-primary)',
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: orphanState.scanning ? 'wait' : 'pointer',
+                  opacity: orphanState.scanning ? 0.6 : 1
+                }}
+              >
+                {orphanState.scanning ? 'Scanning…' : 'Find orphan files'}
+              </button>
+              {orphanState.orphans && orphanState.orphans.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteOrphans}
+                  disabled={orphanState.deleting}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#ffffff',
+                    background: '#dc2626',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: orphanState.deleting ? 'wait' : 'pointer',
+                    opacity: orphanState.deleting ? 0.6 : 1
+                  }}
+                >
+                  {orphanState.deleting
+                    ? 'Deleting…'
+                    : `Delete ${orphanState.orphans.length} orphan file(s)`}
+                </button>
+              ) : null}
+            </div>
+            {orphanState.message ? (
+              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--fg-secondary)' }}>
+                {orphanState.message}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </Section>
 
       <Section title="Updates">
@@ -165,6 +296,92 @@ export function SettingsPage() {
           <Kv k="Graph" v="Batch PageRank (damping 0.85, 30 iterations)" />
         </dl>
       </Section>
+    </div>
+  )
+}
+
+function formatMB(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function ThemeRow({
+  value,
+  onChange
+}: {
+  value: ThemePreference
+  onChange: (v: ThemePreference) => void
+}) {
+  const active = THEME_OPTIONS.find((t) => t.id === value)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg-primary)' }}>Theme</div>
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', marginTop: 3 }}>
+          {active?.hint ?? 'Switch the entire UI palette'}
+        </div>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as ThemePreference)}
+        style={{
+          padding: '7px 12px',
+          fontSize: 13,
+          color: 'var(--fg-primary)',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-md)',
+          cursor: 'pointer',
+          minWidth: 160
+        }}
+      >
+        {THEME_OPTIONS.map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function SidebarModeRow({
+  value,
+  onChange
+}: {
+  value: SidebarMode
+  onChange: (v: SidebarMode) => void
+}) {
+  const active = SIDEBAR_MODE_OPTIONS.find((o) => o.id === value)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg-primary)' }}>Sidebar</div>
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', marginTop: 3 }}>
+          {active?.hint ?? 'Choose how the sidebar behaves'}
+        </div>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as SidebarMode)}
+        style={{
+          padding: '7px 12px',
+          fontSize: 13,
+          color: 'var(--fg-primary)',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-md)',
+          cursor: 'pointer',
+          minWidth: 180
+        }}
+      >
+        {SIDEBAR_MODE_OPTIONS.map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

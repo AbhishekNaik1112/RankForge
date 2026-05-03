@@ -1,0 +1,119 @@
+/* Optional theme presets. Each block sets the same token names that
+ * tokens.css defines for [data-theme='dark'], using palette values
+ * sourced from each theme's canonical reference. */
+
+/* Monokai — Wimer Hazenberg's classic palette */
+[data-theme='monokai'] {
+  color-scheme: dark;
+
+  --bg-app:     #1e1f1c;
+  --bg-panel:   #272822;
+  --bg-muted:   #34352f;
+  --bg-subtle:  #1a1b18;
+  --bg-hover:   #3e3d32;
+
+  --fg-primary:   #f8f8f2;
+  --fg-secondary: #d8d8d2;
+  --fg-muted:     #a59f85;
+  --fg-subtle:    #75715e;
+  --fg-on-accent: #1e1f1c;
+
+  --border-subtle: #34352f;
+  --border-strong: #49483e;
+
+  --accent:       #a6e22e;
+  --accent-hover: #b8eb45;
+  --accent-soft:  color-mix(in srgb, #a6e22e 16%, transparent);
+  --ring:         color-mix(in srgb, #a6e22e 40%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Dracula — official palette (draculatheme.com) */
+[data-theme='dracula'] {
+  color-scheme: dark;
+
+  --bg-app:     #21222c;
+  --bg-panel:   #282a36;
+  --bg-muted:   #343746;
+  --bg-subtle:  #1e1f29;
+  --bg-hover:   #44475a;
+
+  --fg-primary:   #f8f8f2;
+  --fg-secondary: #e2e2dc;
+  --fg-muted:     #abb2bf;
+  --fg-subtle:    #6272a4;
+  --fg-on-accent: #21222c;
+
+  --border-subtle: #343746;
+  --border-strong: #44475a;
+
+  --accent:       #bd93f9;
+  --accent-hover: #cda9fb;
+  --accent-soft:  color-mix(in srgb, #bd93f9 16%, transparent);
+  --ring:         color-mix(in srgb, #bd93f9 40%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Nord — official palette (nordtheme.com) */
+[data-theme='nord'] {
+  color-scheme: dark;
+
+  --bg-app:     #2e3440;
+  --bg-panel:   #3b4252;
+  --bg-muted:   #434c5e;
+  --bg-subtle:  #292e39;
+  --bg-hover:   #4c566a;
+
+  --fg-primary:   #eceff4;
+  --fg-secondary: #d8dee9;
+  --fg-muted:     #abb1bb;
+  --fg-subtle:    #7b8493;
+  --fg-on-accent: #2e3440;
+
+  --border-subtle: #434c5e;
+  --border-strong: #4c566a;
+
+  --accent:       #88c0d0;
+  --accent-hover: #a5d3df;
+  --accent-soft:  color-mix(in srgb, #88c0d0 18%, transparent);
+  --ring:         color-mix(in srgb, #88c0d0 40%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Tokyo Night — popular VS Code theme by enkia */
+[data-theme='tokyo-night'] {
+  color-scheme: dark;
+
+  --bg-app:     #16161e;
+  --bg-panel:   #1a1b26;
+  --bg-muted:   #24283b;
+  --bg-subtle:  #14141a;
+  --bg-hover:   #2a2f44;
+
+  --fg-primary:   #c0caf5;
+  --fg-secondary: #a9b1d6;
+  --fg-muted:     #828bb8;
+  --fg-subtle:    #565f89;
+  --fg-on-accent: #16161e;
+
+  --border-subtle: #24283b;
+  --border-strong: #414868;
+
+  --accent:       #7aa2f7;
+  --accent-hover: #98b8fa;
+  --accent-soft:  color-mix(in srgb, #7aa2f7 18%, transparent);
+  --ring:         color-mix(in srgb, #7aa2f7 40%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.45);
+}

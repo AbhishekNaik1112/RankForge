@@ -1,13 +1,32 @@
+import { Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import type { ContentItem } from '../lib/api'
 import { formatBytes } from '../lib/contentType'
+import { BrowseFilesButton } from './BrowseFilesButton'
 import { TypeBadge } from './TypeBadge'
 
 interface Props {
   items: ContentItem[]
   onOpen: (id: string) => void
+  onIngest?: (files: File[]) => void
+  onDelete?: (id: string) => Promise<void>
 }
 
-export function LibraryGrid({ items, onOpen }: Props) {
+export function LibraryGrid({ items, onOpen, onIngest, onDelete }: Props) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleDelete(item: ContentItem, e: React.MouseEvent): Promise<void> {
+    e.stopPropagation()
+    if (!onDelete) return
+    if (!window.confirm(`Delete "${item.title}"?`)) return
+    setDeletingId(item.id)
+    try {
+      await onDelete(item.id)
+    } finally {
+      setDeletingId(null)
+    }
+  }
   if (items.length === 0) {
     return (
       <div
@@ -17,10 +36,15 @@ export function LibraryGrid({ items, onOpen }: Props) {
           color: 'var(--fg-muted)',
           fontSize: 14,
           border: '1px dashed var(--border-subtle)',
-          borderRadius: 'var(--radius-lg)'
+          borderRadius: 'var(--radius-lg)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16
         }}
       >
-        No content yet. Drop files anywhere on the window to get started.
+        <div>No content yet. Drop files anywhere on the window, or browse to pick.</div>
+        {onIngest ? <BrowseFilesButton onFilesSelected={onIngest} /> : null}
       </div>
     )
   }
@@ -34,11 +58,17 @@ export function LibraryGrid({ items, onOpen }: Props) {
       }}
     >
       {items.map((item) => (
-        <button
+        <div
           key={item.id}
+          onMouseEnter={() => setHoveredId(item.id)}
+          onMouseLeave={() => setHoveredId(null)}
+          style={{ position: 'relative' }}
+        >
+        <button
           type="button"
           onClick={() => onOpen(item.id)}
           style={{
+            width: '100%',
             textAlign: 'left',
             padding: 0,
             background: 'var(--bg-panel)',
@@ -110,6 +140,43 @@ export function LibraryGrid({ items, onOpen }: Props) {
             </div>
           </div>
         </button>
+        {onDelete && hoveredId === item.id ? (
+          <button
+            type="button"
+            onClick={(e) => handleDelete(item, e)}
+            disabled={deletingId === item.id}
+            aria-label={`Delete ${item.title}`}
+            title="Delete"
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              width: 28,
+              height: 28,
+              display: 'grid',
+              placeItems: 'center',
+              background: 'color-mix(in srgb, var(--bg-app) 88%, transparent)',
+              backdropFilter: 'blur(4px)',
+              color: 'var(--fg-secondary)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: deletingId === item.id ? 'wait' : 'pointer',
+              opacity: deletingId === item.id ? 0.5 : 1,
+              boxShadow: 'var(--shadow-sm)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ef4444'
+              e.currentTarget.style.borderColor = '#ef4444'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--fg-secondary)'
+              e.currentTarget.style.borderColor = 'var(--border-strong)'
+            }}
+          >
+            <Trash2 size={14} strokeWidth={2} />
+          </button>
+        ) : null}
+        </div>
       ))}
     </div>
   )

@@ -10,9 +10,13 @@ export interface IngestLogEntry {
   error?: string
 }
 
+interface IngestOptions {
+  description?: string | null
+}
+
 interface UseIngest {
   ingestLog: IngestLogEntry[]
-  ingestFiles: (files: File[]) => Promise<void>
+  ingestFiles: (files: File[], opts?: IngestOptions) => Promise<void>
   /** Bumps when any ingest completes (success or failure). Feed this to
    * downstream components that list content so they refetch. */
   dataVersion: number
@@ -24,7 +28,7 @@ export function useIngest(): UseIngest {
   const [ingestLog, setIngestLog] = useState<IngestLogEntry[]>([])
   const [dataVersion, setDataVersion] = useState(0)
 
-  const ingestFiles = useCallback(async (files: File[]) => {
+  const ingestFiles = useCallback(async (files: File[], opts?: IngestOptions) => {
     for (const file of files) {
       const entry: IngestLogEntry = {
         id: crypto.randomUUID(),
@@ -35,7 +39,11 @@ export function useIngest(): UseIngest {
 
       try {
         const buffer = await file.arrayBuffer()
-        await ingestFile({ buffer, filename: file.name })
+        await ingestFile({
+          buffer,
+          filename: file.name,
+          description: opts?.description ?? null
+        })
         setIngestLog((prev) =>
           prev.map((e) => (e.id === entry.id ? { ...e, status: 'done' } : e))
         )

@@ -22,6 +22,8 @@ const api: IpcApi = {
   getPythonStatus: () => ipcRenderer.invoke('get-python-status'),
 
   openLogDir: () => ipcRenderer.invoke('open-log-dir'),
+  findOrphanFiles: () => ipcRenderer.invoke('find-orphan-files'),
+  deleteOrphanFiles: (paths: string[]) => ipcRenderer.invoke('delete-orphan-files', paths),
 
   isConfigured: () => ipcRenderer.invoke('is-configured'),
   getConfig: () => ipcRenderer.invoke('get-config'),

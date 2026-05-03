@@ -4,9 +4,10 @@ import { getGraph, type GraphData } from '../lib/api'
 
 interface Props {
   refreshKey: number
+  onOpen: (id: string) => void
 }
 
-export function GraphPage({ refreshKey }: Props) {
+export function GraphPage({ refreshKey, onOpen }: Props) {
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] })
   const [loading, setLoading] = useState(true)
 
@@ -41,7 +42,7 @@ export function GraphPage({ refreshKey }: Props) {
         </p>
       </header>
 
-      <GraphView nodes={graph.nodes} edges={graph.edges} />
+      <GraphView nodes={graph.nodes} edges={graph.edges} onOpen={onOpen} />
     </div>
   )
 }

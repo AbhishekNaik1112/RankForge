@@ -1,7 +1,8 @@
-import { Trash2, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { Maximize2, Trash2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { ContentItem } from '../lib/api'
 import { formatBytes } from '../lib/contentType'
+import { ImageLightbox } from './ImageLightbox'
 import { TypeBadge } from './TypeBadge'
 
 interface Props {
@@ -11,15 +12,28 @@ interface Props {
 }
 
 export function DetailDrawer({ item, onClose, onDelete }: Props) {
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !lightboxOpen) onClose()
     }
     if (item) window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [item, onClose])
+  }, [item, onClose, lightboxOpen])
+
+  useEffect(() => {
+    if (!item) setLightboxOpen(false)
+  }, [item])
 
   if (!item) return null
+
+  const isImage = item.content_type === 'image'
+  const previewSrc = isImage && item.source_path
+    ? `file://${item.source_path}`
+    : item.thumbnail_path
+      ? `file://${item.thumbnail_path}`
+      : null
 
   return (
     <>
@@ -93,21 +107,63 @@ export function DetailDrawer({ item, onClose, onDelete }: Props) {
             {item.title}
           </h2>
 
-          {item.thumbnail_path ? (
-            <img
-              src={`file://${item.thumbnail_path}`}
-              alt={item.title}
-              decoding="async"
+          {previewSrc ? (
+            <div
+              role={isImage ? 'button' : undefined}
+              tabIndex={isImage ? 0 : -1}
+              onClick={() => isImage && setLightboxOpen(true)}
+              onKeyDown={(e) => {
+                if (isImage && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault()
+                  setLightboxOpen(true)
+                }
+              }}
+              title={isImage ? 'Click to view at full resolution' : undefined}
               style={{
-                width: '100%',
-                maxHeight: 320,
-                objectFit: 'contain',
+                position: 'relative',
+                marginBottom: 16,
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-subtle)',
                 background: 'var(--bg-muted)',
-                marginBottom: 16
+                overflow: 'hidden',
+                cursor: isImage ? 'zoom-in' : 'default'
               }}
-            />
+            >
+              <img
+                src={previewSrc}
+                alt={item.title}
+                decoding="async"
+                style={{
+                  width: '100%',
+                  maxHeight: isImage ? 480 : 320,
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+              />
+              {isImage ? (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    right: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: '#fff',
+                    background: 'rgba(0, 0, 0, 0.55)',
+                    backdropFilter: 'blur(4px)',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                >
+                  <Maximize2 size={11} strokeWidth={2.4} />
+                  Original
+                </span>
+              ) : null}
+            </div>
           ) : null}
 
           <MetaGrid item={item} />
@@ -138,6 +194,9 @@ export function DetailDrawer({ item, onClose, onDelete }: Props) {
         @keyframes rfFade { from { opacity: 0 } to { opacity: 1 } }
         @keyframes rfSlideIn { from { transform: translateX(8px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
       `}</style>
+      {lightboxOpen && isImage && previewSrc ? (
+        <ImageLightbox src={previewSrc} alt={item.title} onClose={() => setLightboxOpen(false)} />
+      ) : null}
     </>
   )
 }

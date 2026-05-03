@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.chunker import split as split_chunks
-from services.embeddings import embed_batch, embed_image, embed_text
+from services.embeddings import _normalize_text, embed_batch, embed_image, embed_text
 from services.extractors import detect_content_type, extract_body
 from services.ranking import (
     compute_ranks,
@@ -47,6 +47,11 @@ logger = structlog.get_logger(__name__)
 class IngestFileRequest(BaseModel):
     source_path: str = Field(min_length=1)
     title: str | None = None  # falls back to filename
+    # Optional caption for image content. Embedded as text chunks so search
+    # can hit images via the user's words, not just CLIP image-vector
+    # similarity. Ignored for non-image types (their body comes from the
+    # extractor). Whitespace-only descriptions are normalized away.
+    description: str | None = None
 
 
 class IngestTextRequest(BaseModel):
@@ -128,13 +133,20 @@ async def ingest_file(payload: IngestFileRequest):
     mime_type = _guess_mime(content_type, src)
 
     if content_type == "image":
-        # Image content keeps its CLIP image embedding on the parent row;
-        # no chunking (CLIP image encoder operates on the whole image).
+        # Image content keeps its CLIP image embedding on the parent row.
+        # If the user provided a description, store it as the body and
+        # chunk+embed it like text content. Search then surfaces images via
+        # BOTH the parent image embedding AND the description's text chunks.
         embedding = await asyncio.to_thread(embed_image, src)
-        body = None
         thumb = await asyncio.to_thread(make_thumbnail, src, src.parent)
         thumbnail_path = str(thumb)
-        chunks: list[str] = []
+        description_clean = _normalize_text(payload.description or "")
+        if description_clean:
+            body = description_clean
+            chunks = await asyncio.to_thread(split_chunks, description_clean)
+        else:
+            body = None
+            chunks = []
     else:
         body = await asyncio.to_thread(extract_body, src, content_type)
         if not body.strip():
@@ -178,6 +190,11 @@ async def ingest_file(payload: IngestFileRequest):
 
 @router.post("/content/paste", response_model=ContentResponse)
 async def ingest_text(payload: IngestTextRequest):
+    # Pydantic min_length=1 only counts raw chars. Whitespace-only bodies
+    # would otherwise produce a row with no embedding and no chunks — invisible
+    # to search, untraceable in the library. Reject explicitly.
+    if not payload.body.strip():
+        raise HTTPException(status_code=422, detail="Body must contain non-whitespace text.")
     chunks = await asyncio.to_thread(split_chunks, f"{payload.title}\n\n{payload.body}")
     row = await insert_content(
         title=payload.title,
@@ -207,9 +224,16 @@ async def search_content(
     limit: int = Query(default=SEARCH_LIMIT, ge=1, le=50),
     candidates: int = Query(default=SEARCH_CANDIDATES, ge=1, le=500),
 ):
-    query_vec = await asyncio.to_thread(embed_text, q)
+    # Normalize the query so "  HELLO  " and "hello" hit the same vector. The
+    # Pydantic min_length=1 lets through whitespace-only and zero-information
+    # queries; we collapse those to empty and short-circuit to no-results.
+    q_norm = _normalize_text(q)
+    if not q_norm:
+        return []
+
+    query_vec = await asyncio.to_thread(embed_text, q_norm)
     rows = await hybrid_candidates(
-        query_embedding=query_vec, query_text=q, limit=candidates
+        query_embedding=query_vec, query_text=q_norm, limit=candidates
     )
 
     if not rows:
@@ -291,7 +315,7 @@ async def search_content(
     results.sort(key=lambda r: r.final_score, reverse=True)
     logger.info(
         "search",
-        query=q,
+        query=q_norm,
         candidates=len(rows),
         returned=min(limit, len(results)),
         top_score=results[0].final_score if results else None,
@@ -313,12 +337,24 @@ async def remove_content(content_id: uuid.UUID):
     if paths is None:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    # Unlink files best-effort. Main process owns the disk, but backend also cleans up
-    # if running locally — safe because paths are absolute and validated by presence.
+    # Unlink files best-effort. Main process re-attempts deletion using the
+    # paths returned below (belt-and-suspenders): if backend's unlink is
+    # blocked by a Windows file lock or permission error, main's retry might
+    # succeed once the holder closes the file.
+    unlink_failures: list[str] = []
     for p in (paths.source_path, paths.thumbnail_path):
         if p:
             try:
                 os.unlink(p)
-            except (FileNotFoundError, PermissionError):
+            except FileNotFoundError:
                 pass
-    return {"ok": True}
+            except (PermissionError, OSError) as e:
+                logger.warning("delete_unlink_failed", path=p, error=str(e))
+                unlink_failures.append(p)
+
+    return {
+        "ok": True,
+        "source_path": paths.source_path,
+        "thumbnail_path": paths.thumbnail_path,
+        "unlink_failures": unlink_failures,
+    }

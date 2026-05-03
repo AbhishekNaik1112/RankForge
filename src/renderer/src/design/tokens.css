@@ -1,4 +1,8 @@
-/* RankForge design tokens - minimal + modern (Linear/Notion-inspired) */
+/* RankForge design tokens.
+ * Theme-agnostic base in :root; per-theme overrides live below
+ * keyed by [data-theme="..."]. The useTheme hook writes that attr
+ * onto <html>. The 'system' user preference resolves to light/dark
+ * via prefers-color-scheme before the attr is set. */
 
 :root {
   /* Neutral palette (zinc) */
@@ -20,38 +24,13 @@
   --indigo-600: #4f46e5;
   --indigo-700: #4338ca;
 
-  /* Semantic (content types) */
-  --type-text:     #6366f1;  /* indigo */
-  --type-markdown: #8b5cf6;  /* violet */
-  --type-pdf:      #ef4444;  /* red */
-  --type-docx:     #3b82f6;  /* blue */
-  --type-pptx:     #f97316;  /* orange */
-  --type-image:    #10b981;  /* emerald */
-
-  /* Light mode (default) */
-  --bg-app:     var(--zinc-50);
-  --bg-panel:   #ffffff;
-  --bg-muted:   var(--zinc-100);
-  --bg-subtle:  var(--zinc-50);
-  --bg-hover:   var(--zinc-100);
-
-  --fg-primary:   var(--zinc-900);
-  --fg-secondary: var(--zinc-700);
-  --fg-muted:     var(--zinc-500);
-  --fg-subtle:    var(--zinc-400);
-  --fg-on-accent: #ffffff;
-
-  --border-subtle: var(--zinc-200);
-  --border-strong: var(--zinc-300);
-
-  --accent:       var(--indigo-600);
-  --accent-hover: var(--indigo-700);
-  --accent-soft:  color-mix(in srgb, var(--indigo-600) 12%, transparent);
-  --ring:         color-mix(in srgb, var(--indigo-500) 40%, transparent);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.06);
+  /* Semantic (content types) — same across themes */
+  --type-text:     #6366f1;
+  --type-markdown: #8b5cf6;
+  --type-pdf:      #ef4444;
+  --type-docx:     #3b82f6;
+  --type-pptx:     #f97316;
+  --type-image:    #10b981;
 
   /* Scale */
   --radius-sm:  4px;
@@ -78,32 +57,62 @@
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+/* Light theme — also the default if no [data-theme] is set */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
 
-    --bg-app:     #0a0a0b;        /* slightly warmer than zinc-950 */
-    --bg-panel:   #131316;        /* one notch above bg-app */
-    --bg-muted:   #1c1c20;
-    --bg-subtle:  #0e0e10;
-    --bg-hover:   #1f1f24;
+  --bg-app:     var(--zinc-50);
+  --bg-panel:   #ffffff;
+  --bg-muted:   var(--zinc-100);
+  --bg-subtle:  var(--zinc-50);
+  --bg-hover:   var(--zinc-100);
 
-    --fg-primary:   #f4f4f5;
-    --fg-secondary: #d4d4d8;
-    --fg-muted:     #9a9aa3;
-    --fg-subtle:    #6b6b75;
+  --fg-primary:   var(--zinc-900);
+  --fg-secondary: var(--zinc-700);
+  --fg-muted:     var(--zinc-500);
+  --fg-subtle:    var(--zinc-400);
+  --fg-on-accent: #ffffff;
 
-    --border-subtle: #1f1f24;
-    --border-strong: #2c2c33;
+  --border-subtle: var(--zinc-200);
+  --border-strong: var(--zinc-300);
 
-    --accent:       var(--indigo-400);    /* lighter accent reads better on dark */
-    --accent-hover: #a5b4fc;               /* indigo-300 */
-    --accent-soft:  color-mix(in srgb, var(--indigo-400) 16%, transparent);
+  --accent:       var(--indigo-600);
+  --accent-hover: var(--indigo-700);
+  --accent-soft:  color-mix(in srgb, var(--indigo-600) 12%, transparent);
+  --ring:         color-mix(in srgb, var(--indigo-500) 40%, transparent);
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
-  }
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-app:     #0a0a0b;
+  --bg-panel:   #131316;
+  --bg-muted:   #1c1c20;
+  --bg-subtle:  #0e0e10;
+  --bg-hover:   #1f1f24;
+
+  --fg-primary:   #f4f4f5;
+  --fg-secondary: #d4d4d8;
+  --fg-muted:     #9a9aa3;
+  --fg-subtle:    #6b6b75;
+  --fg-on-accent: #ffffff;
+
+  --border-subtle: #1f1f24;
+  --border-strong: #2c2c33;
+
+  --accent:       var(--indigo-400);
+  --accent-hover: #a5b4fc;
+  --accent-soft:  color-mix(in srgb, var(--indigo-400) 16%, transparent);
+  --ring:         color-mix(in srgb, var(--indigo-400) 40%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {

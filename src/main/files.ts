@@ -1,13 +1,44 @@
 import { app } from 'electron'
-import { mkdir, unlink, writeFile } from 'fs/promises'
+import { mkdir, readdir, stat, unlink, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024 // 50 MB
 
-function getFilesDir(): string {
+export function getFilesDir(): string {
   return join(app.getPath('userData'), 'files')
+}
+
+export interface OrphanScanResult {
+  orphans: string[]
+  totalBytes: number
+}
+
+/** Scan userData/files for files not referenced by `referencedPaths`.
+ * The set is built by the caller from the backend's content rows. Returns
+ * absolute paths so they can be passed straight to deleteFileIfExists. */
+export async function scanOrphanFiles(referencedPaths: Set<string>): Promise<OrphanScanResult> {
+  const dir = getFilesDir()
+  if (!existsSync(dir)) return { orphans: [], totalBytes: 0 }
+
+  const entries = await readdir(dir)
+  const orphans: string[] = []
+  let totalBytes = 0
+  for (const name of entries) {
+    const abs = join(dir, name)
+    if (referencedPaths.has(abs)) continue
+    try {
+      const s = await stat(abs)
+      if (s.isFile()) {
+        orphans.push(abs)
+        totalBytes += s.size
+      }
+    } catch {
+      // race: file disappeared between readdir and stat — skip
+    }
+  }
+  return { orphans, totalBytes }
 }
 
 function sanitizeFilename(name: string): string {

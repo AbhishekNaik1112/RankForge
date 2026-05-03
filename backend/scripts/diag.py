@@ -313,6 +313,114 @@ def check_fts_direct() -> None:
 # Main
 
 
+EDGE_CASE_QUERIES: list[tuple[str, str]] = [
+    ("empty after strip", "   "),
+    ("single char", "a"),
+    ("punctuation only", "!!!"),
+    ("diacritics", "café résumé"),
+    ("mixed case", "DEEP LEARNING"),
+    ("very long", "lorem ipsum " * 200),
+    ("non-ascii smart quotes", "“hello”"),
+]
+
+
+def check_edge_case_queries() -> None:
+    section("9. Search route: edge-case queries return well-shaped responses")
+    for label, q in EDGE_CASE_QUERIES:
+        subsection(f"[{label}] q={q[:40]!r}{'...' if len(q) > 40 else ''}")
+        try:
+            results = _http.get(BASE, f"/content/search?q={urllib.parse.quote(q)}&limit=3")
+        except Exception as e:  # noqa: BLE001
+            print(f"  ERROR: {e}")
+            continue
+        assert isinstance(results, list), f"expected list, got {type(results).__name__}"
+        print(f"  ok — {len(results)} result(s)")
+        if results:
+            top = results[0]
+            print(f"    top: {top['title'][:50]!r} (rrf={top['final_score']:.4f})")
+
+
+def check_chunk_determinism() -> None:
+    section("10. Chunker: deterministic output")
+    # Stand-alone import; no DB / HTTP needed.
+    from services.chunker import split as split_chunks  # noqa: WPS433
+
+    samples = [
+        ("short", "Short body."),
+        ("multiline", "First paragraph.\n\nSecond paragraph with more text. Third sentence here."),
+        ("long", "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " * 15),
+    ]
+    for label, text in samples:
+        a = split_chunks(text)
+        b = split_chunks(text)
+        ok = a == b
+        print(f"  [{label}] chunks={len(a)}  deterministic={ok}")
+        assert ok, f"chunker non-deterministic for {label}"
+
+
+def check_token_threshold_smoke() -> None:
+    section("11. Embeddings: chunk lengths under CLIP threshold")
+    from services.chunker import split as split_chunks  # noqa: WPS433
+    from services.embeddings import CLIP_CHAR_WARN_THRESHOLD  # noqa: WPS433
+
+    # Use longest text-bearing doc body as our worst case.
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT title, body
+            FROM content
+            WHERE body IS NOT NULL
+            ORDER BY length(body) DESC
+            LIMIT 1
+            """
+        ).fetchall()
+    if not rows:
+        print("  skipping: no text content")
+        return
+
+    title, body = rows[0]
+    chunks = split_chunks(body)
+    over = [c for c in chunks if len(c) > CLIP_CHAR_WARN_THRESHOLD]
+    print(f"  longest doc: {title!r}  ({len(body)} chars → {len(chunks)} chunks)")
+    print(f"  chunks over warn threshold ({CLIP_CHAR_WARN_THRESHOLD} chars): {len(over)}/{len(chunks)}")
+    if over:
+        for c in over[:3]:
+            print(f"    {len(c)} chars: {c[:60]!r}…")
+
+
+def check_orphan_files() -> None:
+    section("12. Files on disk: orphan scan vs content.source_path")
+    # Tries the userData/files dir if it exists locally; otherwise skips.
+    candidate_dirs: list[Path] = []
+    if os.environ.get("APPDATA"):
+        candidate_dirs.append(Path(os.environ["APPDATA"]) / "rankforge" / "files")
+    candidate_dirs.append(Path.home() / ".config" / "rankforge" / "files")
+    files_dir = next((d for d in candidate_dirs if d.is_dir()), None)
+    if files_dir is None:
+        print("  skipping: userData/files dir not found locally")
+        return
+
+    on_disk = {p.name for p in files_dir.iterdir() if p.is_file()}
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT source_path FROM content WHERE source_path IS NOT NULL"
+        ).fetchall()
+    referenced = {Path(r[0]).name for r in rows if r[0]}
+    orphans = on_disk - referenced
+    missing = referenced - on_disk
+    print(f"  files dir:  {files_dir}")
+    print(f"  on disk:    {len(on_disk)}")
+    print(f"  referenced: {len(referenced)}")
+    print(f"  orphans:    {len(orphans)}")
+    print(f"  missing:    {len(missing)}")
+    if orphans:
+        for name in list(orphans)[:5]:
+            print(f"    orphan: {name}")
+    if missing:
+        for name in list(missing)[:5]:
+            print(f"    missing: {name}")
+
+
 def main() -> None:
     _http.require_backend(BASE)
 
@@ -324,6 +432,10 @@ def main() -> None:
     check_pgvector_direct()
     check_fts_direct()
     check_chunk_distribution()
+    check_edge_case_queries()
+    check_chunk_determinism()
+    check_token_threshold_smoke()
+    check_orphan_files()
 
     print("\n" + "=" * 72)
     print("  ALL CHECKS COMPLETE")

@@ -48,6 +48,9 @@ export interface IngestFilePayload {
   filename: string
   /** Optional display title; falls back to filename stem. */
   title?: string
+  /** Optional caption for image content. Embedded as text chunks so search
+   * covers the user's own words. Ignored for non-image types. */
+  description?: string | null
 }
 
 export interface IngestTextPayload {
@@ -76,6 +79,8 @@ export interface IpcApi {
 
   // Diagnostics
   openLogDir: () => Promise<{ ok: boolean; error?: string }>
+  findOrphanFiles: () => Promise<{ orphans: string[]; totalBytes: number }>
+  deleteOrphanFiles: (paths: string[]) => Promise<{ deleted: number }>
 
   // First-run setup
   isConfigured: () => Promise<{ configured: boolean; running: boolean }>

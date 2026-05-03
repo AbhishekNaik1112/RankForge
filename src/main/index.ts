@@ -45,6 +45,22 @@ function createWindow(): BrowserWindow {
   // Help). It's generic noise for a focused single-window app.
   win.setMenu(null)
 
+  // Defensive: in production, swallow F12 / Ctrl+Shift+I / Cmd+Option+I so
+  // DevTools can't be opened by accident or by a curious user. The default
+  // Electron menu accelerators are already gone via setMenu(null) and the
+  // dev shortcut handler is gated by is.dev — this is belt-and-suspenders
+  // for any future Electron version that flips a default.
+  if (!is.dev) {
+    win.webContents.on('before-input-event', (event, input) => {
+      const isF12 = input.key === 'F12'
+      const isInspector =
+        (input.control || input.meta) && input.shift && (input.key === 'I' || input.key === 'i')
+      if (isF12 || isInspector) {
+        event.preventDefault()
+      }
+    })
+  }
+
   win.on('ready-to-show', () => {
     win.show()
   })

@@ -239,6 +239,13 @@ async def hybrid_candidates(
     3. UNION ALL → group by content_id → MIN(distance), MAX(rank).
     4. Pull the best-matching chunk body per parent for the UI snippet.
     5. JOIN content for metadata, LEFT JOIN content_rank for PageRank.
+
+    Aggregation rationale (step 3): a doc may surface in both the chunk-level
+    and parent-level subqueries. We take MIN(cosine_distance) and MAX(fts_rank)
+    so the best-matching evidence wins per doc — never punish a doc for ALSO
+    appearing weakly via the other path. Image rows have no chunks; they reach
+    `merged` exclusively through `parent_sem` (and `parent_fts` if they ever
+    grow a tsv).
     """
     async with aget_conn() as conn:
         cur = await conn.execute(

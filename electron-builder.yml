@@ -4,9 +4,24 @@ directories:
   buildResources: resources
   output: dist
 
+# Negative-only patterns merge with electron-builder's default `**/*` and
+# its smart node_modules handling (production deps only). The previous
+# `!node_modules/**/*` blanket-excluded all node_modules, which caused
+# electron-updater (a runtime require from main) to be missing in the
+# packaged app.
 files:
-  - out/**/*
-  - "!node_modules/**/*"
+  - "!**/.vscode/*"
+  - "!src/**/*"
+  - "!electron.vite.config.{js,ts,mjs,cjs}"
+  - "!**/{.eslintignore,.prettierignore,.prettierrc*,.eslintrc.cjs,.eslintrc.js,.editorconfig,tsconfig.json,tsconfig.*.json,*.tsbuildinfo}"
+  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml,yarn.lock,package-lock.json}"
+  - "!backend/**/*"
+  - "!.venv/**/*"
+  - "!docs/**/*"
+  - "!resources/build_icon.py"
+  - "!*.md"
+  - "!CLAUDE.md"
+  - "!.tmp-issues/**/*"
 
 # Ship the PyInstaller-bundled backend instead of raw Python source —
 # end users don't need Python installed. Build the bundle first with:
@@ -46,4 +61,3 @@ publish:
   provider: github
   owner: AbhishekNaik1112
   repo: RankForge
-

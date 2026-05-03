@@ -1,14 +1,16 @@
 import { FileText, Image as ImageIcon, Sparkles, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrowseFilesButton } from '../components/BrowseFilesButton'
 import { ResultCard } from '../components/ResultCard'
 import { SearchBar } from '../components/SearchBar'
 import { searchContent, type SearchResult } from '../lib/api'
 
 interface Props {
   onOpen: (id: string) => void
+  onIngest: (files: File[]) => void
 }
 
-export function SearchPage({ onOpen }: Props) {
+export function SearchPage({ onOpen, onIngest }: Props) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,7 +91,7 @@ export function SearchPage({ onOpen }: Props) {
         </div>
       ) : null}
 
-      {!hasSearched && !error ? <DropHint /> : null}
+      {!hasSearched && !error ? <DropHint onIngest={onIngest} /> : null}
 
       {hasSearched && !loading && results.length === 0 && !error ? (
         <NoResults query={query} />
@@ -107,7 +109,7 @@ export function SearchPage({ onOpen }: Props) {
 }
 
 /** Pre-search empty state. Reads as a real drop target. */
-function DropHint() {
+function DropHint({ onIngest }: { onIngest: (files: File[]) => void }) {
   return (
     <div
       style={{
@@ -155,6 +157,7 @@ function DropHint() {
           embedded, and indexed — then search across all of it from this box.
         </div>
       </div>
+      <BrowseFilesButton onFilesSelected={onIngest} />
       <div
         style={{
           display: 'flex',
@@ -165,9 +168,9 @@ function DropHint() {
           fontSize: 12
         }}
       >
-        <SupportChip icon={FileText} label=".txt &middot; .md &middot; .pdf" />
-        <SupportChip icon={FileText} label=".docx &middot; .pptx" />
-        <SupportChip icon={ImageIcon} label=".png &middot; .jpg &middot; .webp" />
+        <SupportChip icon={FileText} label=".txt · .md · .pdf" />
+        <SupportChip icon={FileText} label=".docx · .pptx" />
+        <SupportChip icon={ImageIcon} label=".png · .jpg · .webp" />
       </div>
     </div>
   )

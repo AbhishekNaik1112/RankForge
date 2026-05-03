@@ -29,6 +29,8 @@ export const ingestText = (payload: IngestTextPayload) => window.api.ingestText(
 export const deleteContent = (id: string) => window.api.deleteContent(id)
 export const recomputePagerank = () => window.api.recomputePagerank()
 export const openLogDir = () => window.api.openLogDir()
+export const findOrphanFiles = () => window.api.findOrphanFiles()
+export const deleteOrphanFiles = (paths: string[]) => window.api.deleteOrphanFiles(paths)
 
 export const isConfigured = () => window.api.isConfigured()
 export const setupBackend = (payload: { databaseUrl: string }) =>

@@ -1,6 +1,6 @@
 {
   "name": "rankforge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Multimodal semantic + keyword search over a personal knowledge graph",
   "main": "./out/main/index.js",
@@ -14,6 +14,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "electron-updater": "^6.8.3",

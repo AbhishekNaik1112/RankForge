@@ -27,9 +27,17 @@ export function useSelectedItem(onDeleted: () => void): UseSelectedItem {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteContent(id)
-      setSelectedItem(null)
-      onDeleted()
+      try {
+        await deleteContent(id)
+        setSelectedItem(null)
+        onDeleted()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Delete failed'
+        // Surface to the user — the previous behavior swallowed silently,
+        // leaving a phantom "deleted" UI state while the row remained.
+        window.alert(`Could not delete: ${message}`)
+        throw err
+      }
     },
     [onDeleted]
   )

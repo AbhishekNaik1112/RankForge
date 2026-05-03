@@ -3,9 +3,16 @@ import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { isConfigured, readConfig, writeConfig } from './config'
 import { getPythonPort, isPythonRunning, spawnPython, waitForReady } from './python'
-import { saveDroppedFile } from './files'
+import { deleteFileIfExists, saveDroppedFile, scanOrphanFiles } from './files'
 import { checkForUpdates, downloadUpdate, quitAndInstall } from './updater'
 import type { IngestFilePayload, IngestTextPayload } from '../shared/types'
+
+interface DeleteContentResponse {
+  ok: boolean
+  source_path?: string | null
+  thumbnail_path?: string | null
+  unlink_failures?: string[]
+}
 
 function apiUrl(path: string): string {
   const port = getPythonPort()
@@ -40,7 +47,8 @@ export function registerIpcHandlers(): void {
     const title = payload.title ?? payload.filename.replace(/\.[^.]+$/, '')
     return apiFetch('/content/ingest', jsonRequest('POST', {
       source_path: sourcePath,
-      title
+      title,
+      description: payload.description ?? null
     }))
   })
 
@@ -77,7 +85,20 @@ export function registerIpcHandlers(): void {
 
   // Mutate
   ipcMain.handle('delete-content', async (_event, id: string) => {
-    return apiFetch(`/content/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    // Backend deletes the DB row, attempts to unlink files, and returns the
+    // paths regardless. We retry the unlink from main as a safety net for the
+    // "DB row gone, file remains" scenario (Windows lock, transient permission
+    // error). deleteFileIfExists swallows ENOENT, so a successful backend
+    // unlink doesn't surface as an error here.
+    const result = await apiFetch<DeleteContentResponse>(
+      `/content/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    )
+    await Promise.all([
+      deleteFileIfExists(result.source_path ?? null),
+      deleteFileIfExists(result.thumbnail_path ?? null)
+    ])
+    return { ok: result.ok }
   })
 
   ipcMain.handle('recompute-pagerank', async () => {
@@ -111,6 +132,32 @@ export function registerIpcHandlers(): void {
     // Don't return the actual URL to avoid logging it; just whether it's set.
     // The wizard never needs to read it back — only to set a new one.
     return { databaseUrl: cfg.databaseUrl ? '••••configured••••' : '' }
+  })
+
+  // Maintenance — orphan file scan + cleanup. Backend's source-of-truth for
+  // referenced paths is the content table; we read it through /content and
+  // diff against userData/files on disk.
+  ipcMain.handle('find-orphan-files', async () => {
+    const items = await apiFetch<
+      Array<{ source_path: string | null; thumbnail_path: string | null }>
+    >('/content')
+    const referenced = new Set<string>()
+    for (const it of items) {
+      if (it.source_path) referenced.add(it.source_path)
+      if (it.thumbnail_path) referenced.add(it.thumbnail_path)
+    }
+    return scanOrphanFiles(referenced)
+  })
+
+  ipcMain.handle('delete-orphan-files', async (_event, paths: string[]) => {
+    if (!Array.isArray(paths)) throw new Error('delete-orphan-files requires string[]')
+    let deleted = 0
+    for (const p of paths) {
+      if (typeof p !== 'string') continue
+      await deleteFileIfExists(p)
+      deleted += 1
+    }
+    return { deleted }
   })
 
   // Auto-update
