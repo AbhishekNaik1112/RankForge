@@ -1,10 +1,10 @@
 {
   "name": "rankforge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "AI-Powered Content Discovery Platform - Hybrid Ranking using PageRank + Semantic AI Search",
+  "description": "Multimodal semantic + keyword search over a personal knowledge graph",
   "main": "./out/main/index.js",
-  "author": "AbhishekNaik12",
+  "author": "AbhishekNaik1112",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.8.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

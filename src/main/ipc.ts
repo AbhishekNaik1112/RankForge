@@ -4,6 +4,7 @@ import { join } from 'path'
 import { isConfigured, readConfig, writeConfig } from './config'
 import { getPythonPort, isPythonRunning, spawnPython, waitForReady } from './python'
 import { saveDroppedFile } from './files'
+import { checkForUpdates, downloadUpdate, quitAndInstall } from './updater'
 import type { IngestFilePayload, IngestTextPayload } from '../shared/types'
 
 function apiUrl(path: string): string {
@@ -111,6 +112,11 @@ export function registerIpcHandlers(): void {
     // The wizard never needs to read it back — only to set a new one.
     return { databaseUrl: cfg.databaseUrl ? '••••configured••••' : '' }
   })
+
+  // Auto-update
+  ipcMain.handle('check-for-updates', async () => checkForUpdates())
+  ipcMain.handle('download-update', async () => downloadUpdate())
+  ipcMain.handle('quit-and-install', () => quitAndInstall())
 
   ipcMain.handle('setup-backend', async (_event, payload: { databaseUrl: string }) => {
     const url = payload?.databaseUrl?.trim()

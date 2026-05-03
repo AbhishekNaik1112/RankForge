@@ -4,9 +4,12 @@ import { DropZone } from './components/DropZone'
 import { IngestToasts } from './components/IngestToasts'
 import { SetupWizard } from './components/SetupWizard'
 import { Sidebar, type Page } from './components/Sidebar'
+import { UpdateBanner } from './components/UpdateBanner'
+import { UpdaterContext, useUpdaterContext } from './hooks/updaterContext'
 import { useIngest } from './hooks/useIngest'
 import { usePythonStatus } from './hooks/usePythonStatus'
 import { useSelectedItem } from './hooks/useSelectedItem'
+import { useUpdater } from './hooks/useUpdater'
 import { GraphPage } from './pages/GraphPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SearchPage } from './pages/SearchPage'
@@ -16,10 +19,9 @@ type Bootstate = 'checking' | 'wizard' | 'ready'
 
 export function App() {
   const [boot, setBoot] = useState<Bootstate>('checking')
+  // Single updater subscription, shared with SettingsPage via context.
+  const updater = useUpdater()
 
-  // Check on mount whether the backend is configured. If not, show the
-  // first-run wizard. If yes, the main process has already spawned Python
-  // by now (see src/main/index.ts), so we can render the main UI.
   useEffect(() => {
     let cancelled = false
     window.api
@@ -37,16 +39,22 @@ export function App() {
   }, [])
 
   if (boot === 'checking') {
-    // Brief flash; main process has the splash window via show:false +
-    // ready-to-show, so the user typically doesn't see this.
     return null
   }
 
   if (boot === 'wizard') {
-    return <SetupWizard onConfigured={() => setBoot('ready')} />
+    return (
+      <UpdaterContext.Provider value={updater}>
+        <SetupWizard onConfigured={() => setBoot('ready')} />
+      </UpdaterContext.Provider>
+    )
   }
 
-  return <MainShell />
+  return (
+    <UpdaterContext.Provider value={updater}>
+      <MainShell />
+    </UpdaterContext.Provider>
+  )
 }
 
 function MainShell() {
@@ -55,8 +63,6 @@ function MainShell() {
   const { ingestLog, ingestFiles, dataVersion } = useIngest()
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Combine ingest-triggered refreshes with delete-triggered refreshes so
-  // Library/Graph pages refetch on either event.
   useEffect(() => {
     setRefreshKey((k) => k + 1)
   }, [dataVersion])
@@ -65,27 +71,52 @@ function MainShell() {
   const { selectedItem, openItem, closeItem, handleDelete } = useSelectedItem(bumpAfterDelete)
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-app)' }}>
-      <Sidebar current={page} onNavigate={setPage} pythonReady={pythonReady} />
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: 'var(--bg-app)'
+      }}
+    >
+      <UpdateBannerSlot />
 
-      <main
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: 'var(--space-8) var(--space-10)'
-        }}
-      >
-        <div style={{ maxWidth: 960, margin: '0 auto' }}>
-          {page === 'search' && <SearchPage onOpen={openItem} />}
-          {page === 'library' && <LibraryPage onOpen={openItem} refreshKey={refreshKey} />}
-          {page === 'graph' && <GraphPage refreshKey={refreshKey} />}
-          {page === 'settings' && <SettingsPage />}
-        </div>
-      </main>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <Sidebar current={page} onNavigate={setPage} pythonReady={pythonReady} />
+
+        <main
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: 'var(--space-8) var(--space-10)'
+          }}
+        >
+          <div style={{ maxWidth: 960, margin: '0 auto' }}>
+            {page === 'search' && <SearchPage onOpen={openItem} />}
+            {page === 'library' && <LibraryPage onOpen={openItem} refreshKey={refreshKey} />}
+            {page === 'graph' && <GraphPage refreshKey={refreshKey} />}
+            {page === 'settings' && <SettingsPage />}
+          </div>
+        </main>
+      </div>
 
       <DropZone onFilesDropped={ingestFiles} />
       <DetailDrawer item={selectedItem} onClose={closeItem} onDelete={handleDelete} />
       <IngestToasts log={ingestLog} />
     </div>
+  )
+}
+
+/** Reads the shared updater state and renders the banner. Pulled into a
+ * tiny child so MainShell's hooks don't all re-run on update events. */
+function UpdateBannerSlot() {
+  const { status, download, install, dismiss } = useUpdaterContext()
+  return (
+    <UpdateBanner
+      status={status}
+      onDownload={download}
+      onInstall={install}
+      onDismiss={dismiss}
+    />
   )
 }

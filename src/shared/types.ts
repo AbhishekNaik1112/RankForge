@@ -83,4 +83,19 @@ export interface IpcApi {
   setupBackend: (payload: {
     databaseUrl: string
   }) => Promise<{ ok: boolean; restartRequired: boolean }>
+
+  // Auto-update
+  checkForUpdates: () => Promise<{ ok: boolean; reason?: string }>
+  downloadUpdate: () => Promise<{ ok: boolean; reason?: string }>
+  quitAndInstall: () => Promise<void>
+  onUpdateEvent: (callback: (event: UpdateEvent) => void) => () => void
 }
+
+export type UpdateEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string; releaseDate?: string; releaseNotes?: string }
+  | { type: 'not-available'; version: string }
+  | { type: 'download-progress'; percent: number; transferred: number; total: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string }
+  | { type: 'dev-mode' }

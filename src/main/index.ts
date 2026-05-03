@@ -4,6 +4,7 @@ import { is, optimizer } from '@electron-toolkit/utils'
 import { isConfigured } from './config'
 import { spawnPython, waitForReady, killPython } from './python'
 import { registerIpcHandlers } from './ipc'
+import { checkForUpdates, initAutoUpdater } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -119,6 +120,16 @@ app.whenReady().then(async () => {
   // Open DevTools in development
   if (is.dev) {
     mainWindow.webContents.openDevTools()
+  }
+
+  // Wire up auto-update event broadcasting now that the window exists.
+  // Schedule a check ~10s after launch so it doesn't compete with startup
+  // I/O. Skipped in dev (no installed app to update).
+  initAutoUpdater()
+  if (!is.dev) {
+    setTimeout(() => {
+      void checkForUpdates()
+    }, 10_000)
   }
 
   app.on('activate', () => {

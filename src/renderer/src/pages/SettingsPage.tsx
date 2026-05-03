@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useUpdaterContext } from '../hooks/updaterContext'
 import { openLogDir, recomputePagerank } from '../lib/api'
 
 export function SettingsPage() {
   const [recomputing, setRecomputing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [logMessage, setLogMessage] = useState<string | null>(null)
+  const { status: updateStatus, check: checkForUpdates } = useUpdaterContext()
 
   async function handleRecompute() {
     setRecomputing(true)
@@ -86,6 +88,38 @@ export function SettingsPage() {
             {message}
           </div>
         ) : null}
+      </Section>
+
+      <Section title="Updates">
+        <p style={{ margin: 0, color: 'var(--fg-muted)', fontSize: 13 }}>
+          RankForge checks for updates from GitHub Releases shortly after launch.
+          You can also check now.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+          <button
+            type="button"
+            onClick={checkForUpdates}
+            disabled={updateStatus.kind === 'checking' || updateStatus.kind === 'downloading'}
+            style={{
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--fg-primary)',
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-md)',
+              cursor:
+                updateStatus.kind === 'checking' || updateStatus.kind === 'downloading'
+                  ? 'wait'
+                  : 'pointer',
+              opacity:
+                updateStatus.kind === 'checking' || updateStatus.kind === 'downloading' ? 0.6 : 1
+            }}
+          >
+            {updateStatus.kind === 'checking' ? 'Checking…' : 'Check for Updates'}
+          </button>
+          <UpdateStatusLine status={updateStatus} />
+        </div>
       </Section>
 
       <Section title="Diagnostics">
@@ -175,4 +209,45 @@ function Kv({ k, v }: { k: string; v: string }) {
       <dd style={{ margin: 0, color: 'var(--fg-secondary)' }}>{v}</dd>
     </>
   )
+}
+
+function UpdateStatusLine({
+  status
+}: {
+  status: ReturnType<typeof useUpdaterContext>['status']
+}) {
+  let text: string | null = null
+  let color = 'var(--fg-muted)'
+  switch (status.kind) {
+    case 'idle':
+      text = null
+      break
+    case 'checking':
+      text = 'Checking GitHub Releases…'
+      break
+    case 'available':
+      text = `Version ${status.version} available — see banner above.`
+      color = 'var(--fg-secondary)'
+      break
+    case 'not-available':
+      text = `You're on the latest version (${status.version}).`
+      break
+    case 'downloading':
+      text = `Downloading ${status.percent}%`
+      color = 'var(--fg-secondary)'
+      break
+    case 'downloaded':
+      text = `Update ready — restart to install ${status.version}.`
+      color = 'var(--fg-secondary)'
+      break
+    case 'error':
+      text = `Update failed: ${status.message}`
+      color = '#fca5a5'
+      break
+    case 'dev-mode':
+      text = 'Auto-update is disabled in development mode.'
+      break
+  }
+  if (!text) return null
+  return <span style={{ fontSize: 12.5, color }}>{text}</span>
 }

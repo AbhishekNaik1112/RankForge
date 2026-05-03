@@ -37,3 +37,13 @@ mac:
 
 linux:
   target: AppImage
+
+# Auto-update via GitHub Releases. The publish config tells
+# electron-updater where to look for `latest.yml` (the manifest the
+# packager uploads alongside the .exe). When the running app finds a
+# newer version listed there, it downloads + installs.
+publish:
+  provider: github
+  owner: AbhishekNaik1112
+  repo: RankForge
+
